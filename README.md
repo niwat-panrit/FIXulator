@@ -109,3 +109,8 @@ claude --dangerously-skip-permissions
 |---|---|---|
 | `fixulator-claude-config-*` | `~/.claude` | Claude Code auth & config |
 | `fixulator-m2` | `~/.m2/repository` | Maven dependency cache |
+
+# to enter shell inside container, either
+
+docker exec -it <container_name_or_id> /bin/bash
+docker exec -it <container_name_or_id> sh

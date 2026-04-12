@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:f="jakarta.faces.core"
+      xmlns:ui="jakarta.faces.facelets"
+      xmlns:p="http://primefaces.org/ui">
+
+<ui:composition template="/WEB-INF/templates/layout.xhtml">
+
+    <ui:define name="pageTitle">Task Manager</ui:define>
+
+    <ui:define name="content">
+
+        <h:form id="mainForm">
+
+            <h1 style="margin-top:0; color:#1e3a5f;">Task Manager</h1>
+
+            <!-- ── Add new task ─────────────────────────────────────────── -->
+            <div class="section-title">Add New Task</div>
+
+            <div class="add-form">
+
+                <div>
+                    <label for="newTitle">Title *</label>
+                    <p:inputText id="newTitle" value="#{taskBean.newTask.title}"
+                                 placeholder="Task description…" style="width:280px"
+                                 required="true" requiredMessage="Title is required."/>
+                </div>
+
+                <div>
+                    <label for="newPriority">Priority</label>
+                    <p:selectOneMenu id="newPriority" value="#{taskBean.newTask.priority}">
+                        <f:selectItems value="#{taskBean.priorityOptions}"/>
+                    </p:selectOneMenu>
+                </div>
+
+                <div>
+                    <label for="newDue">Due Date</label>
+                    <p:datePicker id="newDue" value="#{taskBean.newTask.dueDate}"
+                                  pattern="yyyy-MM-dd" showIcon="true"/>
+                </div>
+
+                <!--
+                    p:commandButton triggers AJAX, calls addTask(), then refreshes
+                    the task table (update="taskTable") — no JavaScript needed.
+                -->
+                <p:commandButton value="Add Task" icon="pi pi-plus"
+                                 action="#{taskBean.addTask}"
+                                 update="taskTable addFormMessages :globalGrowl"
+                                 styleClass="p-button-success"/>
+
+                <p:messages id="addFormMessages" showDetail="true"
+                            style="align-self:center; font-size:.85rem"/>
+            </div>
+
+            <!-- ── Filter bar ────────────────────────────────────────────── -->
+            <div class="section-title">Task List</div>
+
+            <p style="margin:.25rem 0 .75rem; font-size:.85rem; color:#64748b;">
+                Filter by priority or use the column search in the table header.
+            </p>
+
+            <!-- ── Data table ────────────────────────────────────────────── -->
+            <!--
+                p:dataTable supports sorting, filtering, pagination, row editing,
+                and selection — all configured declaratively in XHTML.
+            -->
+            <p:dataTable id="taskTable"
+                         value="#{taskBean.tasks}" var="t"
+                         paginator="true" rows="8"
+                         paginatorTemplate="{FirstPageLink} {PreviousPageLink} {PageLinks} {NextPageLink} {LastPageLink} {RowsPerPageDropdown}"
+                         rowsPerPageTemplate="5,8,15,30"
+                         sortMode="single"
+                         filterDelay="400"
+                         emptyMessage="No tasks found."
+                         rowStyleClass="#{t.done ? 'p-disabled' : ''}">
+
+                <!-- Done checkbox -->
+                <p:column headerText="" style="width:50px; text-align:center">
+                    <p:selectBooleanCheckbox value="#{t.done}">
+                        <p:ajax event="change" update=":mainForm:taskTable :globalGrowl"/>
+                    </p:selectBooleanCheckbox>
+                </p:column>
+
+                <!-- Title — sortable + filterable -->
+                <p:column headerText="Title" sortBy="#{t.title}" filterBy="#{t.title}"
+                          filterMatchMode="contains">
+                    <h:outputText value="#{t.title}"
+                                  style="#{t.done ? 'text-decoration:line-through;color:#94a3b8' : ''}"/>
+                </p:column>
+
+                <!-- Priority — sortable + filterable via dropdown -->
+                <p:column headerText="Priority" sortBy="#{t.priority}"
+                          filterBy="#{t.priority}" filterMatchMode="exact"
+                          style="width:130px; text-align:center">
+                    <f:facet name="filter">
+                        <p:selectOneMenu onchange="PF('taskTable').filter()"
+                                         styleClass="p-column-filter">
+                            <f:selectItem itemLabel="All"    itemValue=""/>
+                            <f:selectItem itemLabel="High"   itemValue="High"/>
+                            <f:selectItem itemLabel="Medium" itemValue="Medium"/>
+                            <f:selectItem itemLabel="Low"    itemValue="Low"/>
+                        </p:selectOneMenu>
+                    </f:facet>
+                    <span class="badge-#{t.priority}">#{t.priority}</span>
+                </p:column>
+
+                <!-- Due Date — sortable -->
+                <p:column headerText="Due Date" sortBy="#{t.dueDate}" style="width:130px">
+                    <h:outputText value="#{t.dueDate}"/>
+                </p:column>
+
+                <!-- Actions -->
+                <p:column headerText="Actions" style="width:140px; text-align:center">
+
+                    <!-- Edit button opens inline dialog -->
+                    <p:commandButton icon="pi pi-pencil" styleClass="p-button-rounded p-button-text"
+                                     title="Edit"
+                                     action="#{taskBean.selectForEdit(t)}"
+                                     update=":mainForm:editDialog"
+                                     oncomplete="PF('editDlg').show()"/>
+
+                    <!-- Delete with confirmation -->
+                    <p:commandButton icon="pi pi-trash" styleClass="p-button-rounded p-button-text p-button-danger"
+                                     title="Delete"
+                                     action="#{taskBean.deleteTask(t)}"
+                                     update=":mainForm:taskTable :globalGrowl">
+                        <p:confirm header="Confirm Delete"
+                                   message="Delete task '#{t.title}'?"
+                                   icon="pi pi-exclamation-triangle"/>
+                    </p:commandButton>
+
+                </p:column>
+
+            </p:dataTable>
+
+            <!-- ── Confirm dialog (for delete) ───────────────────────────── -->
+            <!--
+                ui-confirmdialog-no  → PrimeFaces wires this button to cancel / hide
+                ui-confirmdialog-yes → PrimeFaces wires this button to re-fire the
+                                       original delete button's AJAX action
+            -->
+            <p:confirmDialog global="true" showEffect="fade" hideEffect="fade">
+                <p:commandButton value="No" type="button"
+                                 styleClass="p-button-secondary ui-confirmdialog-no"
+                                 icon="pi pi-times"/>
+                <p:commandButton value="Yes, delete" type="button"
+                                 styleClass="p-button-danger ui-confirmdialog-yes"
+                                 icon="pi pi-check"/>
+            </p:confirmDialog>
+
+            <!-- ── Edit dialog ───────────────────────────────────────────── -->
+            <p:dialog id="editDialog" header="Edit Task" widgetVar="editDlg"
+                      modal="true" resizable="false" style="width:420px">
+
+                <p:outputPanel rendered="#{taskBean.selected != null}">
+
+                    <div style="display:flex; flex-direction:column; gap:1rem; padding:.5rem 0">
+
+                        <div>
+                            <label style="font-size:.82rem;color:#64748b">Title</label>
+                            <p:inputText value="#{taskBean.selected.title}" style="width:100%"/>
+                        </div>
+
+                        <div>
+                            <label style="font-size:.82rem;color:#64748b">Priority</label>
+                            <p:selectOneMenu value="#{taskBean.selected.priority}" style="width:100%">
+                                <f:selectItems value="#{taskBean.priorityOptions}"/>
+                            </p:selectOneMenu>
+                        </div>
+
+                        <div>
+                            <label style="font-size:.82rem;color:#64748b">Due Date</label>
+                            <p:datePicker value="#{taskBean.selected.dueDate}"
+                                          pattern="yyyy-MM-dd" showIcon="true" style="width:100%"/>
+                        </div>
+
+                        <div style="display:flex; gap:.75rem; justify-content:flex-end; margin-top:.5rem">
+                            <p:commandButton value="Save" icon="pi pi-check"
+                                             action="#{taskBean.saveEdit}"
+                                             update=":mainForm :globalGrowl"
+                                             oncomplete="PF('editDlg').hide()"/>
+                            <p:commandButton value="Cancel" icon="pi pi-times"
+                                             styleClass="p-button-secondary"
+                                             action="#{taskBean.cancelEdit}"
+                                             update=":mainForm:editDialog"
+                                             oncomplete="PF('editDlg').hide()"/>
+                        </div>
+
+                    </div>
+
+                </p:outputPanel>
+
+            </p:dialog>
+
+        </h:form>
+
+    </ui:define>
+
+</ui:composition>
+</html>

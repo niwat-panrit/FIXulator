@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:ui="jakarta.faces.facelets"
+      xmlns:p="http://primefaces.org/ui">
+
+<ui:composition template="/WEB-INF/templates/layout.xhtml">
+
+    <ui:define name="pageTitle">About</ui:define>
+
+    <ui:define name="content">
+
+        <div class="about-card">
+
+            <h2>About This Demo</h2>
+
+            <p>
+                This application is a minimal but realistic Task Manager built with
+                <strong>Jakarta Server Faces (JSF) 4.0</strong> and the
+                <strong>PrimeFaces 14</strong> component library running on
+                <strong>Jakarta EE 10</strong>.
+            </p>
+
+            <p>
+                The key point: <em>not a single line of hand-written JavaScript exists in
+                this project</em>. Every interactive behaviour — AJAX partial rendering,
+                modal dialogs, sortable/filterable tables, date pickers, charts — is
+                expressed purely in Java and Facelets XHTML.
+            </p>
+
+            <div class="section-title" style="margin-top:1.5rem">Technology Stack</div>
+
+            <table>
+                <tr>
+                    <th>Layer</th>
+                    <th>Technology</th>
+                    <th>Role</th>
+                </tr>
+                <tr>
+                    <td>UI Framework</td>
+                    <td>JSF 4.0 (Facelets)</td>
+                    <td>Component model, EL, navigation, AJAX lifecycle</td>
+                </tr>
+                <tr>
+                    <td>Component Library</td>
+                    <td>PrimeFaces 14</td>
+                    <td>Rich widgets: DataTable, Dialog, Chart, DatePicker…</td>
+                </tr>
+                <tr>
+                    <td>Managed Beans</td>
+                    <td>CDI 4 (@Named + scopes)</td>
+                    <td>Business logic &amp; view state</td>
+                </tr>
+                <tr>
+                    <td>Runtime</td>
+                    <td>Jakarta EE 10 server</td>
+                    <td>WildFly / Payara / TomEE / OpenLiberty</td>
+                </tr>
+                <tr>
+                    <td>Build</td>
+                    <td>Maven 3 (WAR packaging)</td>
+                    <td>Dependency management, embedded Jetty for dev</td>
+                </tr>
+            </table>
+
+            <div class="section-title" style="margin-top:1.5rem">How JSF Avoids Hand-Written JS</div>
+
+            <p:panel header="Server-Side Component Model">
+                JSF maintains a server-side UI component tree. Each
+                <code>p:dataTable</code>, <code>p:dialog</code>, or
+                <code>p:chart</code> tag is backed by a Java class that renders
+                itself to HTML+JS. The developer only writes Java beans and XHTML
+                declarations.
+            </p:panel>
+
+            <br/>
+
+            <p:panel header="AJAX via p:ajax / p:commandButton">
+                PrimeFaces uses the JSF AJAX API to submit partial forms and update
+                named component regions (<code>update="tableId"</code>).
+                The framework generates and manages all XMLHttpRequest calls.
+            </p:panel>
+
+            <br/>
+
+            <p:panel header="Charts without Canvas Code">
+                <code>p:chart</code> serialises a Java model object
+                (<code>BarChartModel</code>, <code>PieChartModel</code>, …) to
+                Chart.js–compatible JSON on the server. The developer configures
+                datasets and colours in Java; no <code>new Chart(ctx, …)</code>
+                call is ever written.
+            </p:panel>
+
+            <br/>
+            <p:button value="Back to Dashboard" outcome="/index" icon="pi pi-home"/>
+
+        </div>
+
+    </ui:define>
+
+</ui:composition>
+</html>

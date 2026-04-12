@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:f="jakarta.faces.core"
+      xmlns:ui="jakarta.faces.facelets"
+      xmlns:p="http://primefaces.org/ui">
+
+<!--
+    Master layout template (Facelets composition).
+    Child pages define the <ui:define name="content"> slot.
+    No hand-written JavaScript anywhere in the app.
+-->
+<h:head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>JSF + PrimeFaces Demo — <ui:insert name="pageTitle">Task Manager</ui:insert></title>
+
+    <!-- PrimeFaces injects its own CSS / JS bundles automatically -->
+    <h:outputStylesheet library="css" name="app.css"/>
+</h:head>
+
+<h:body styleClass="p-m-0">
+
+    <!-- ── Top navigation bar ─────────────────────────────────────────── -->
+    <div class="topbar">
+        <span class="topbar-brand">
+            <i class="pi pi-th-large"/> JSF + PrimeFaces Demo
+        </span>
+        <nav class="topbar-nav">
+            <h:link outcome="/index"     value="Dashboard"    styleClass="topbar-link"/>
+            <h:link outcome="/tasks"     value="Task Manager" styleClass="topbar-link"/>
+            <h:link outcome="/about"     value="About"        styleClass="topbar-link"/>
+        </nav>
+    </div>
+
+    <!-- ── Page content slot ──────────────────────────────────────────── -->
+    <div class="page-content">
+        <ui:insert name="content">
+            <p>No content defined.</p>
+        </ui:insert>
+    </div>
+
+    <!-- ── Footer ─────────────────────────────────────────────────────── -->
+    <div class="footer">
+        Built with JSF 4 · PrimeFaces 14 · Jakarta EE 10 — Zero hand-written JS
+    </div>
+
+    <!-- PrimeFaces growl for flash messages (session-wide) -->
+    <p:growl id="globalGrowl" life="4000" showDetail="true"/>
+
+</h:body>
+</html>

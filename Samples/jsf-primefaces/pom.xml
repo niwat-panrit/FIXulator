@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>jsf-primefaces-demo</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>war</packaging>
+
+    <name>JSF / PrimeFaces Demo</name>
+    <description>Demo web application using JSF 4.0 + PrimeFaces 14 — zero hand-written JavaScript</description>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <jakartaee.version>10.0.0</jakartaee.version>
+        <primefaces.version>14.0.0</primefaces.version>
+    </properties>
+
+    <dependencies>
+        <!-- Jakarta EE 10 (provided by the runtime, e.g. WildFly / Payara / TomEE) -->
+        <dependency>
+            <groupId>jakarta.platform</groupId>
+            <artifactId>jakarta.jakartaee-api</artifactId>
+            <version>${jakartaee.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- PrimeFaces component library -->
+        <dependency>
+            <groupId>org.primefaces</groupId>
+            <artifactId>primefaces</artifactId>
+            <version>${primefaces.version}</version>
+            <classifier>jakarta</classifier>
+        </dependency>
+
+        <!-- PrimeFaces Themes (optional) -->
+        <dependency>
+            <groupId>org.webjars.npm</groupId>
+            <artifactId>primeflex</artifactId>
+            <version>3.3.1</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>jsf-primefaces-demo</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.4.0</version>
+                <configuration>
+                    <failOnMissingWebXml>false</failOnMissingWebXml>
+                </configuration>
+            </plugin>
+
+            <!-- TomEE Plume: embedded Jakarta EE 10 server (includes MyFaces + CDI) -->
+            <plugin>
+                <groupId>org.apache.tomee.maven</groupId>
+                <artifactId>tomee-maven-plugin</artifactId>
+                <version>10.0.0</version>
+                <configuration>
+                    <tomeeClassifier>plume</tomeeClassifier>  <!-- plume = MyFaces + CDI + JPA -->
+                    <context>demo</context>
+                    <tomeeHttpPort>8080</tomeeHttpPort>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

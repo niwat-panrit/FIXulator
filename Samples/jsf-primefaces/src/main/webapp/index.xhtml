@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:f="jakarta.faces.core"
+      xmlns:ui="jakarta.faces.facelets"
+      xmlns:p="http://primefaces.org/ui">
+
+<ui:composition template="/WEB-INF/templates/layout.xhtml">
+
+    <ui:define name="pageTitle">Dashboard</ui:define>
+
+    <ui:define name="content">
+
+        <h1 style="margin-top:0; color:#1e3a5f;">Dashboard</h1>
+
+        <!-- ── Summary stat cards ──────────────────────────────────────── -->
+        <!-- h:panelGroup gives this block a JSF client-id so p:ajax can target it -->
+        <h:panelGroup layout="block" id="statCards" styleClass="stat-grid">
+
+            <div class="stat-card">
+                <span class="label">Total Tasks</span>
+                <span class="value">#{taskBean.totalCount}</span>
+            </div>
+
+            <div class="stat-card done">
+                <span class="label">Completed</span>
+                <span class="value">#{taskBean.doneCount}</span>
+            </div>
+
+            <div class="stat-card">
+                <span class="label">Pending</span>
+                <span class="value">#{taskBean.pendingCount}</span>
+            </div>
+
+            <div class="stat-card high">
+                <span class="label">High-Priority Open</span>
+                <span class="value">#{taskBean.highCount}</span>
+            </div>
+
+        </h:panelGroup>
+
+        <!-- ── Charts ──────────────────────────────────────────────────── -->
+        <div class="section-title">Task Analytics</div>
+
+        <div class="chart-row">
+
+            <div class="chart-card">
+                <h3 style="margin-top:0; font-size:.95rem; color:#475569;">Tasks by Priority</h3>
+                <!--
+                    p:chart renders a Chart.js canvas entirely from the Java model.
+                    No JavaScript written by the developer.
+                -->
+                <p:barChart model="#{chartBean.barModel}" style="height:260px"/>
+            </div>
+
+            <div class="chart-card">
+                <h3 style="margin-top:0; font-size:.95rem; color:#475569;">Done vs Pending</h3>
+                <p:pieChart id="pieChart" model="#{chartBean.pieModel}" style="height:260px"/>
+            </div>
+
+        </div>
+
+        <!-- ── Recent tasks preview ────────────────────────────────────── -->
+        <div class="section-title">All Tasks (quick view)</div>
+
+        <p:dataTable id="taskTable" value="#{taskBean.tasks}" var="t"
+                     paginator="true" rows="5"
+                     paginatorTemplate="{FirstPageLink} {PreviousPageLink} {PageLinks} {NextPageLink} {LastPageLink}"
+                     styleClass="p-datatable-sm"
+                     rowStyleClass="#{t.done ? 'p-disabled' : ''}">
+
+            <p:column headerText="Title">
+                <h:outputText value="#{t.title}"
+                              style="#{t.done ? 'text-decoration:line-through; color:#94a3b8' : ''}"/>
+            </p:column>
+
+            <p:column headerText="Priority" style="width:110px; text-align:center">
+                <span class="badge-#{t.priority}">#{t.priority}</span>
+            </p:column>
+
+            <p:column headerText="Due Date" style="width:130px">
+                <h:outputText value="#{t.dueDate}"/>
+            </p:column>
+
+            <p:column headerText="Done" style="width:70px; text-align:center">
+                <!-- Checkbox bound to bean; AJAX update refreshes this table -->
+                <h:form>
+                    <p:selectBooleanCheckbox value="#{t.done}">
+                        <!--
+                            A single AJAX call updates three regions at once:
+                            :statCards  — Done / Pending / High-priority counts
+                            :pieChart   — Done vs Pending chart rebuilt from TaskBean
+                            :taskTable  — Row strikethrough + checkbox state
+                        -->
+                        <p:ajax event="change"
+                                update=":statCards :pieChart :taskTable :globalGrowl"/>
+                    </p:selectBooleanCheckbox>
+                </h:form>
+            </p:column>
+
+        </p:dataTable>
+
+        <br/>
+        <p:button value="Manage Tasks" outcome="/tasks" icon="pi pi-arrow-right" iconPos="right"/>
+
+    </ui:define>
+
+</ui:composition>
+</html>

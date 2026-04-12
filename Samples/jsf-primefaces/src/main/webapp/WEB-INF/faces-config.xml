@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<faces-config xmlns="https://jakarta.ee/xml/ns/jakartaee"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                                  https://jakarta.ee/xml/ns/jakartaee/web-facesconfig_4_0.xsd"
+              version="4.0">
+
+    <!--
+        Navigation rules live here when not using implicit navigation.
+        For this demo we rely on JSF implicit navigation (outcome = view id).
+    -->
+
+</faces-config>

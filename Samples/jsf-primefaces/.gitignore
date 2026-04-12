@@ -1,0 +1,12 @@
+# Maven build output
+target/
+
+# Editor backup files
+*.xhtml.1
+*.java.1
+
+# OS / IDE
+.DS_Store
+.idea/
+*.iml
+.vscode/
