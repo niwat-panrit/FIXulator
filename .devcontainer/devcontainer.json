@@ -1,0 +1,90 @@
+{
+  "name": "FIXulator",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+
+  // ── Workspace ──────────────────────────────────────────────────────────────
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+
+  // ── Claude Code (Anthropic official feature) ────────────────────────────────
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+
+  // ── Persist Claude Code auth & config across rebuilds ──────────────────────
+  "mounts": [
+    "source=fixulator-claude-config-${devcontainerId},target=/home/vscode/.claude,type=volume",
+    // Persist Maven local repository so dependencies aren't re-downloaded every rebuild
+    "source=fixulator-m2,target=/home/vscode/.m2/repository,type=volume"
+  ],
+
+  // ── Environment ────────────────────────────────────────────────────────────
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    // JDK 17 is the default; switch with: sdk use java 21-tem
+    "JAVA_HOME": "/usr/local/sdkman/candidates/java/current",
+    "SDKMAN_DIR": "/usr/local/sdkman"
+  },
+
+  "remoteUser": "vscode",
+  "containerUser": "vscode",
+
+  // ── Port forwards ──────────────────────────────────────────────────────────
+  "forwardPorts": [
+    8080,   // App server
+    5005    // JVM remote debug
+  ],
+
+  // ── VS Code customisations ─────────────────────────────────────────────────
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Java
+        "vscjava.vscode-java-pack",          // Java Extension Pack (Language support, debugger, test runner)
+        "vscjava.vscode-maven",              // Maven project support
+        "vscjava.vscode-gradle",             // Gradle support
+        "redhat.java",                       // Language support for Java
+        "vscjava.vscode-java-debug",         // Java debugger
+        "vscjava.vscode-java-test",          // Java test runner
+        // Code quality
+        "sonarsource.sonarlint-vscode",      // SonarLint static analysis
+        "streetsidesoftware.code-spell-checker",
+        // Git & productivity
+        "eamodio.gitlens",
+        "github.vscode-pull-request-github",
+        "mhutchie.git-graph",
+        // Claude Code IDE integration
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        // Java — point to SDKMAN-managed JDKs
+        "java.jdt.ls.java.home": "/usr/local/sdkman/candidates/java/current",
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-17",
+            "path": "/usr/local/sdkman/candidates/java/17-tem",
+            "default": true
+          },
+          {
+            "name": "JavaSE-21",
+            "path": "/usr/local/sdkman/candidates/java/21-tem"
+          }
+        ],
+        "java.compile.nullAnalysis.mode": "automatic",
+        // Editor
+        "editor.formatOnSave": true,
+        "editor.tabSize": 4,
+        "files.eol": "\n",
+        "files.trimTrailingWhitespace": true,
+        // Terminal
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // ── Lifecycle hooks ────────────────────────────────────────────────────────
+  "postCreateCommand": "bash .devcontainer/post-create.sh"
+}
