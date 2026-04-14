@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+    <div class="about-card">
+
+        <h2>About This Demo</h2>
+
+        <p>
+            This application is a minimal but realistic Task Manager built with
+            <strong>Apache Wicket 10</strong> running on an embedded
+            <strong>Jetty 12</strong> (Jakarta EE 10 / Servlet 6.0) server.
+        </p>
+
+        <p>
+            It is a deliberate port of the companion <em>JSF / PrimeFaces</em> demo —
+            every feature maps 1-to-1: stat cards, Chart.js charts, paginated table,
+            add / edit / delete tasks with AJAX partial updates.
+        </p>
+
+        <p>
+            The key Wicket philosophy: <em>HTML templates are valid HTML files that
+            designers can open directly in a browser</em> — the
+            <code>wicket:id</code> attributes are simply ignored by the browser but
+            picked up by the Wicket runtime to wire components.
+        </p>
+
+        <div class="section-title" style="margin-top:1.5rem">Technology Stack</div>
+
+        <table>
+            <tr>
+                <th>Layer</th>
+                <th>Technology</th>
+                <th>Role</th>
+            </tr>
+            <tr>
+                <td>UI Framework</td>
+                <td>Apache Wicket 10</td>
+                <td>Component model, AJAX lifecycle, page mounting</td>
+            </tr>
+            <tr>
+                <td>Chart Library</td>
+                <td>Chart.js 4 (CDN)</td>
+                <td>Bar &amp; Pie charts — data computed in Java, serialised to JS</td>
+            </tr>
+            <tr>
+                <td>Session</td>
+                <td>Wicket WebSession</td>
+                <td>Stores task list across requests (≡ JSF @SessionScoped)</td>
+            </tr>
+            <tr>
+                <td>Runtime</td>
+                <td>Jetty 12 (embedded)</td>
+                <td>Jakarta Servlet 6.0 container</td>
+            </tr>
+            <tr>
+                <td>Build</td>
+                <td>Maven 3 (WAR)</td>
+                <td>Dependency management; <code>mvn jetty:run</code> for dev</td>
+            </tr>
+        </table>
+
+        <div class="section-title" style="margin-top:1.5rem">How Wicket Differs from JSF</div>
+
+        <div class="info-panel">
+            <strong>Page-class + HTML template pairing</strong><br/>
+            Every Wicket page is a plain Java class (<code>WebPage</code> subclass) paired
+            with an HTML template of the same name. Components are added in Java
+            (<code>add(new Label("title", ...))</code>) and bound to HTML via
+            <code>wicket:id</code>. No annotations, no EL expressions in HTML.
+        </div>
+
+        <div class="info-panel">
+            <strong>AJAX via <code>AjaxCheckBox</code> / <code>AjaxButton</code> / <code>AjaxLink</code></strong><br/>
+            Wicket ships AJAX-aware versions of every standard form component.
+            The <code>onUpdate(AjaxRequestTarget)</code> callback receives a
+            <em>target</em> object; calling <code>target.add(component)</code>
+            re-renders that component's markup in-place — exactly like
+            PrimeFaces' <code>update="componentId"</code>.
+        </div>
+
+        <div class="info-panel">
+            <strong>Charts via <code>target.appendJavaScript()</code></strong><br/>
+            Unlike PrimeFaces which generates Chart.js config from a Java model,
+            Wicket takes a lower-level approach: chart data is computed in Java,
+            serialised to a JSON literal string, and injected into a
+            <code>target.appendJavaScript()</code> call that re-initialises
+            the Chart.js instance after each AJAX update.
+        </div>
+
+        <div class="info-panel">
+            <strong>No hand-written AJAX boilerplate</strong><br/>
+            Wicket generates all <code>XMLHttpRequest</code> wiring automatically.
+            The developer only writes the <code>onUpdate()</code> / <code>onSubmit()</code>
+            methods and declares which components to refresh —
+            identical in spirit to JSF's partial-page rendering.
+        </div>
+
+        <br/>
+        <a href="." class="btn btn-primary">&#8962; Back to Dashboard</a>
+
+    </div>
+
+</wicket:extend>
+</body>
+</html>

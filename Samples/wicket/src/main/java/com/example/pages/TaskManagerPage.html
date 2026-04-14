@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+    <h1 style="margin-top:0; color:#1e3a5f;">Task Manager</h1>
+
+    <!-- ── Add new task form ───────────────────────────────────────────── -->
+    <div class="section-title">Add New Task</div>
+
+    <form wicket:id="addForm" class="add-form">
+
+        <div>
+            <label for="newTitle">Title *</label>
+            <!--
+                RequiredTextField is backed by PropertyModel — Wicket validates
+                presence server-side before the AjaxButton.onSubmit fires.
+            -->
+            <input type="text" wicket:id="newTitle" placeholder="Task description…"
+                   style="width:280px"/>
+        </div>
+
+        <div>
+            <label>Priority</label>
+            <select wicket:id="newPriority"></select>
+        </div>
+
+        <div>
+            <label>Due Date</label>
+            <input type="date" wicket:id="newDueDate"/>
+        </div>
+
+        <button type="submit" wicket:id="addBtn" class="btn btn-success">+ Add Task</button>
+
+    </form>
+
+    <!-- ── Filter bar ──────────────────────────────────────────────────── -->
+    <div class="section-title">Task List</div>
+
+    <form wicket:id="filterForm" class="filter-bar">
+        <label>Priority:</label>
+        <select wicket:id="filterPriority">
+            <option value="">All</option>
+        </select>
+        <label>Search title:</label>
+        <input type="text" wicket:id="filterTitle" placeholder="Type to filter…"/>
+    </form>
+
+    <!-- ── Sortable / paginated data table ─────────────────────────────── -->
+    <!--
+        tableContainer is a WebMarkupContainer with setOutputMarkupId(true).
+        AJAX actions (add, delete, checkbox, filter, sort) all target this
+        container to refresh just the table — no full page reload.
+    -->
+    <div wicket:id="tableContainer">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width:50px">Done</th>
+                    <th>
+                        <!--
+                            Sort links are BookmarkablePageLink-equivalents wired
+                            to TaskManagerPage.sortLink() — clicking cycles ASC/DESC.
+                        -->
+                        <a wicket:id="sortByTitle">Title</a>
+                    </th>
+                    <th style="width:130px"><a wicket:id="sortByPriority">Priority</a></th>
+                    <th style="width:130px"><a wicket:id="sortByDueDate">Due Date</a></th>
+                    <th style="width:140px; text-align:center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr wicket:id="tasks">
+                    <td style="text-align:center">
+                        <input type="checkbox" wicket:id="doneCheck"/>
+                    </td>
+                    <td><span class="task-title" wicket:id="title">Title</span></td>
+                    <td><span wicket:id="priority">—</span></td>
+                    <td><span wicket:id="dueDate">—</span></td>
+                    <td style="text-align:center">
+                        <!--
+                            Edit: opens the modal overlay and populates it
+                            with a copy of this task via AJAX.
+                        -->
+                        <a wicket:id="editBtn" class="btn btn-ghost btn-icon"
+                           title="Edit">&#9998;</a>
+                        <!--
+                            Delete: the Java layer appends onclick="if(!confirm(…)) return false;"
+                            so the AJAX call only fires after the user confirms.
+                        -->
+                        <a wicket:id="deleteBtn" class="btn btn-danger btn-icon"
+                           title="Delete">&#128465;</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="pager">
+            <span wicket:id="pager"></span>
+        </div>
+    </div>
+
+    <!-- ── Edit modal ──────────────────────────────────────────────────── -->
+    <!--
+        The overlay <div> is always in the DOM but hidden (display:none via CSS).
+        Opening: target.appendJavaScript("…classList.add('open')").
+        The inner editModal container is refreshed via AJAX to populate fields.
+    -->
+    <div id="editModalOverlay" class="modal-overlay">
+        <div wicket:id="editModal" class="modal-box">
+            <h3>Edit Task</h3>
+            <form wicket:id="editForm">
+
+                <div class="modal-field">
+                    <label>Title</label>
+                    <input type="text" wicket:id="editTitle" style="width:100%"/>
+                </div>
+
+                <div class="modal-field">
+                    <label>Priority</label>
+                    <select wicket:id="editPriority" style="width:100%"></select>
+                </div>
+
+                <div class="modal-field">
+                    <label>Due Date</label>
+                    <input type="date" wicket:id="editDueDate" style="width:100%"/>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit" wicket:id="saveEditBtn" class="btn btn-primary">&#10003; Save</button>
+                    <a wicket:id="cancelEditBtn" class="btn btn-secondary">&#10007; Cancel</a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+</wicket:extend>
+</body>
+</html>

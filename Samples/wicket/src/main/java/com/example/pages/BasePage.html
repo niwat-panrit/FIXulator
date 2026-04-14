@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:wicket="http://wicket.apache.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title wicket:id="pageTitle">Wicket Demo</title>
+</head>
+<body>
+
+<!-- ── Top navigation bar ──────────────────────────────────────────────── -->
+<div class="topbar">
+    <span class="topbar-brand">&#9635; Apache Wicket Demo</span>
+    <nav class="topbar-nav">
+        <a wicket:id="navDashboard" class="topbar-link">Dashboard</a>
+        <a wicket:id="navTasks"     class="topbar-link">Task Manager</a>
+        <a wicket:id="navAbout"     class="topbar-link">About</a>
+    </nav>
+</div>
+
+<!-- ── Feedback messages (errors / info from actions) ─────────────────── -->
+<div style="max-width:1200px; margin:0 auto; padding:0 1.5rem">
+    <div wicket:id="feedback"></div>
+</div>
+
+<!-- ── Page content (child pages inject here) ─────────────────────────── -->
+<div class="page-content">
+    <wicket:child/>
+</div>
+
+<!-- ── Footer ─────────────────────────────────────────────────────────── -->
+<div class="footer">
+    Built with Apache Wicket 10 · Java 17 — Server-side component model with AJAX
+</div>
+
+</body>
+</html>
