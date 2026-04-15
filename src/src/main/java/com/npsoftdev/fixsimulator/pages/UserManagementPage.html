@@ -1,0 +1,90 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+    <div class="page-header">
+        <h4><i class="bi bi-people me-2 text-primary"></i>User Management</h4>
+        <button class="btn btn-sm btn-success">
+            <i class="bi bi-person-plus me-1"></i>Add User
+        </button>
+    </div>
+
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Username</th>
+                        <th>Full Name</th>
+                        <th>Role</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="fw-semibold font-monospace">admin</td>
+                        <td>Administrator</td>
+                        <td><span class="badge bg-danger">Admin</span></td>
+                        <td>admin@npsoftdev.com</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">Just now</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
+                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;" disabled>Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="fw-semibold font-monospace">trader1</td>
+                        <td>John Trader</td>
+                        <td><span class="badge bg-primary">Trader</span></td>
+                        <td>trader1@npsoftdev.com</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">1 hour ago</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
+                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="fw-semibold font-monospace">viewer1</td>
+                        <td>Jane Viewer</td>
+                        <td><span class="badge bg-secondary">Viewer</span></td>
+                        <td>viewer1@npsoftdev.com</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">Yesterday</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
+                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="fw-semibold font-monospace">ops_user</td>
+                        <td>Operations Team</td>
+                        <td><span class="badge bg-info text-dark">Operator</span></td>
+                        <td>ops@npsoftdev.com</td>
+                        <td><span class="badge bg-warning text-dark">Suspended</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">3 days ago</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
+                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</wicket:extend>
+</body>
+</html>

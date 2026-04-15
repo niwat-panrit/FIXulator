@@ -1,8 +1,8 @@
 package com.npsoftdev.fixsimulator.pages;
 
-public class HomePage extends BasePage {
+public class OrdersPage extends BasePage {
 
-    public HomePage() {
+    public OrdersPage() {
         super();
     }
 }

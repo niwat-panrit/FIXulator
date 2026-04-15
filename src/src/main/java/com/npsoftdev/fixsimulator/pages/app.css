@@ -1,0 +1,154 @@
+/* ── Body ────────────────────────────────────────────── */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    background: #f3f4f6;
+}
+
+/* ── Top Navbar ──────────────────────────────────────── */
+.navbar-top {
+    background-color: #0d1117;
+    border-bottom: 1px solid #30363d;
+    min-height: 54px;
+    padding: 0 1rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.navbar-brand-text {
+    color: #f9fafb;
+    font-weight: 700;
+    font-size: 1rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.navbar-brand-text:hover { color: #fff; }
+
+.conn-info-box {
+    flex-grow: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 4px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    overflow: hidden;
+}
+.conn-info-box .sep { color: #4b5563; }
+.conn-seq  { color: #67e8f9; font-weight: 600; }
+.conn-name { color: #fbbf24; font-weight: 600; }
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: #111827;
+    min-height: calc(100vh - 54px);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #1f2937;
+}
+.sidebar .nav-link {
+    color: #9ca3af;
+    padding: 0.42rem 0.85rem;
+    border-radius: 6px;
+    margin: 1px 8px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background 0.12s, color 0.12s;
+}
+.sidebar .nav-link:hover  { color: #f9fafb; background: rgba(255,255,255,0.07); }
+.sidebar .nav-link.active { color: #fff;    background: #2563eb; }
+.sidebar .nav-link.active:hover { background: #1d4ed8; }
+
+.section-label {
+    font-size: 0.67rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #4b5563;
+    padding: 0.7rem 1rem 0.2rem;
+}
+.sidebar-footer {
+    font-size: 0.7rem;
+    color: #374151;
+    text-align: center;
+    padding: 0.5rem;
+}
+
+/* ── Content area ────────────────────────────────────── */
+.content-area { flex-grow: 1; padding: 1.5rem; overflow-y: auto; }
+
+/* ── Page header ─────────────────────────────────────── */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+.page-header h4 { margin: 0; font-weight: 600; color: #111827; font-size: 1.1rem; }
+
+/* ── Stat cards ──────────────────────────────────────── */
+.stat-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 1.1rem 1.4rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.stat-value { font-size: 1.9rem; font-weight: 700; color: #111827; line-height: 1; }
+.stat-label { font-size: 0.78rem; color: #6b7280; margin-top: 4px; }
+
+/* ── Table cards ─────────────────────────────────────── */
+.table-card {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+.table-card-header {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f9fafb;
+}
+.table thead th {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.table tbody td { font-size: 0.85rem; vertical-align: middle; }
+
+/* ── Toolbar ─────────────────────────────────────────── */
+.toolbar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+/* ── FIX message direction labels ────────────────────── */
+.dir-out { color: #2563eb; font-weight: 600; font-size: 0.8rem; }
+.dir-in  { color: #16a34a; font-weight: 600; font-size: 0.8rem; }
+
+/* ── Log level colours ───────────────────────────────── */
+.log-info  { color: #374151; }
+.log-warn  { color: #d97706; }
+.log-error { color: #dc2626; font-weight: 600; }

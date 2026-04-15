@@ -1,0 +1,117 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+    <div class="page-header">
+        <h4><i class="bi bi-arrow-left-right me-2 text-primary"></i>Trades (Execution Reports)</h4>
+        <button class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="toolbar mb-3">
+        <input type="text" class="form-control form-control-sm" placeholder="Symbol" style="width:90px;"/>
+        <input type="text" class="form-control form-control-sm" placeholder="Cl.Ord ID" style="width:150px;"/>
+        <select class="form-select form-select-sm" style="width:110px;">
+            <option value="">Side</option>
+            <option>BUY</option><option>SELL</option>
+        </select>
+        <select class="form-select form-select-sm" style="width:130px;">
+            <option value="">Exec Type</option>
+            <option>New</option><option>PartFill</option>
+            <option>Fill</option><option>Cancelled</option><option>Rejected</option>
+        </select>
+        <button class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <button class="btn btn-sm btn-outline-secondary">Clear</button>
+    </div>
+
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Exec ID</th>
+                        <th>Cl.Ord ID</th>
+                        <th>Exec Type</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Last Qty</th>
+                        <th>Last Px</th>
+                        <th>Cum Qty</th>
+                        <th>Avg Px</th>
+                        <th>Ord Status</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="font-monospace" style="font-size:0.8rem;">EXEC-001</td>
+                        <td class="font-monospace" style="font-size:0.8rem;">CL20260415-001</td>
+                        <td><span class="badge bg-primary">New</span></td>
+                        <td class="fw-semibold">AAPL</td>
+                        <td><span class="badge bg-success">BUY</span></td>
+                        <td>0</td><td>—</td><td>0</td><td>—</td>
+                        <td><span class="badge bg-primary">New</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">09:30:01.456</td>
+                    </tr>
+                    <tr>
+                        <td class="font-monospace" style="font-size:0.8rem;">EXEC-002</td>
+                        <td class="font-monospace" style="font-size:0.8rem;">CL20260415-002</td>
+                        <td><span class="badge bg-warning text-dark">PartFill</span></td>
+                        <td class="fw-semibold">MSFT</td>
+                        <td><span class="badge bg-danger">SELL</span></td>
+                        <td>20</td><td>340.10</td><td>20</td><td>340.10</td>
+                        <td><span class="badge bg-warning text-dark">PartFilled</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">09:30:06.012</td>
+                    </tr>
+                    <tr>
+                        <td class="font-monospace" style="font-size:0.8rem;">EXEC-003</td>
+                        <td class="font-monospace" style="font-size:0.8rem;">CL20260415-003</td>
+                        <td><span class="badge bg-success">Fill</span></td>
+                        <td class="fw-semibold">GOOGL</td>
+                        <td><span class="badge bg-success">BUY</span></td>
+                        <td>25</td><td>2799.50</td><td>25</td><td>2799.50</td>
+                        <td><span class="badge bg-success">Filled</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">09:30:13.101</td>
+                    </tr>
+                    <tr>
+                        <td class="font-monospace" style="font-size:0.8rem;">EXEC-004</td>
+                        <td class="font-monospace" style="font-size:0.8rem;">CL20260415-004</td>
+                        <td><span class="badge bg-secondary">Cancelled</span></td>
+                        <td class="fw-semibold">AMZN</td>
+                        <td><span class="badge bg-danger">SELL</span></td>
+                        <td>0</td><td>—</td><td>0</td><td>—</td>
+                        <td><span class="badge bg-secondary">Cancelled</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">09:31:00.345</td>
+                    </tr>
+                    <tr>
+                        <td class="font-monospace" style="font-size:0.8rem;">EXEC-005</td>
+                        <td class="font-monospace" style="font-size:0.8rem;">CL20260415-001</td>
+                        <td><span class="badge bg-success">Fill</span></td>
+                        <td class="fw-semibold">AAPL</td>
+                        <td><span class="badge bg-success">BUY</span></td>
+                        <td>100</td><td>150.20</td><td>100</td><td>150.20</td>
+                        <td><span class="badge bg-success">Filled</span></td>
+                        <td class="text-muted" style="font-size:0.8rem;">09:31:15.678</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top"
+             style="font-size:0.8rem; color:#6b7280;">
+            <span>Showing 1–5 of 23 execution reports</span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item disabled"><a class="page-link" href="#">&#8592;</a></li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">&#8594;</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+</wicket:extend>
+</body>
+</html>
