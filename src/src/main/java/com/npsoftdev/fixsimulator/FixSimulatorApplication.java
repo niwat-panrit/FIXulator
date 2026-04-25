@@ -1,26 +1,39 @@
 package com.npsoftdev.fixsimulator;
 
 import com.npsoftdev.fixsimulator.pages.*;
-import com.npsoftdev.fixsimulator.plugin.DefaultPlugin;
+import com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin;
+import com.npsoftdev.fixsimulator.plugin.DefaultOrderManagerPlugin;
 import com.npsoftdev.fixsimulator.plugin.NavSection;
 import com.npsoftdev.fixsimulator.plugin.PluginRegistry;
+import com.npsoftdev.fixsimulator.service.ConnectionService;
+import com.npsoftdev.fixsimulator.service.MessageLogService;
+import com.npsoftdev.fixsimulator.service.OrderService;
+import com.npsoftdev.fixsimulator.service.TradeService;
 import org.apache.wicket.Page;
 import org.apache.wicket.csp.CSPDirective;
 import org.apache.wicket.csp.CSPDirectiveSrcValue;
 import org.apache.wicket.protocol.http.WebApplication;
+import quickfix.ConfigError;
+import quickfix.SessionSettings;
+
+import java.io.InputStream;
 
 public class FixSimulatorApplication extends WebApplication {
 
     private PluginRegistry pluginRegistry;
 
+    // ── Services ──────────────────────────────────────────────────────────────
+    // Populated by plugin initialize() hooks; see individual setters below.
+    private ConnectionService connectionService;
+    private MessageLogService messageLogService;
+    private OrderService      orderService;
+    private TradeService      tradeService;
+
+    // ── WebApplication ────────────────────────────────────────────────────────
+
     @Override
     public Class<? extends Page> getHomePage() {
         return HomePage.class;
-    }
-
-    /** Returns the application-scoped plugin registry. */
-    public PluginRegistry getPluginRegistry() {
-        return pluginRegistry;
     }
 
     @Override
@@ -39,43 +52,103 @@ public class FixSimulatorApplication extends WebApplication {
         pluginRegistry = new PluginRegistry();
         registerBuiltInPlugins();
 
-        // Call each plugin's initialize() hook after all are registered
         pluginRegistry.getPlugins().forEach(p -> p.initialize(this));
     }
 
-    /**
-     * Registers the built-in pages as plugins. Add new feature modules here,
-     * or call {@link PluginRegistry#register} from an external bootstrap class.
-     */
+    // ── Service accessors ─────────────────────────────────────────────────────
+
+    public PluginRegistry getPluginRegistry() { return pluginRegistry; }
+
+    public ConnectionService getConnectionService() { return connectionService; }
+    public MessageLogService getMessageLogService() { return messageLogService; }
+    public OrderService      getOrderService()      { return orderService; }
+    public TradeService      getTradeService()      { return tradeService; }
+
+    /** Called by {@link DefaultFixGatewayPlugin#initialize}. */
+    public void setConnectionService(ConnectionService cs) { this.connectionService = cs; }
+
+    /** Called by {@link DefaultFixGatewayPlugin#initialize}. */
+    public void setMessageLogService(MessageLogService mls) { this.messageLogService = mls; }
+
+    /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
+    public void setOrderService(OrderService os) { this.orderService = os; }
+
+    /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
+    public void setTradeService(TradeService ts) { this.tradeService = ts; }
+
+    // ── Plugin registration ───────────────────────────────────────────────────
+
     private void registerBuiltInPlugins() {
+        // The gateway is instantiated first so we can hand it to the order manager.
+        DefaultFixGatewayPlugin gateway = new DefaultFixGatewayPlugin(
+                "connections", "FIX Connections", "bi-hdd-network",
+                NavSection.ADMIN, ConnectionManagementPage.class,
+                loadFixSettings());
+
         // ── Overview ──────────────────────────────────────────────────────────
-        pluginRegistry.register(new DefaultPlugin(
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "dashboard", "Dashboard", "bi-speedometer2",
                 NavSection.OVERVIEW, HomePage.class));
 
         // ── FIX Testing ───────────────────────────────────────────────────────
-        pluginRegistry.register(new DefaultPlugin(
+        pluginRegistry.register(new DefaultOrderManagerPlugin(
                 "orders", "Orders", "bi-card-list",
-                NavSection.MONITORING, OrdersPage.class));
-        pluginRegistry.register(new DefaultPlugin(
+                NavSection.MONITORING, OrdersPage.class,
+                gateway));
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "trades", "Trades", "bi-arrow-left-right",
                 NavSection.MONITORING, TradesPage.class));
-        pluginRegistry.register(new DefaultPlugin(
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "raw-messages", "Raw FIX Messages", "bi-terminal",
                 NavSection.MONITORING, RawMessagesPage.class));
-        pluginRegistry.register(new DefaultPlugin(
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "message-log", "Message Log", "bi-journal-text",
                 NavSection.MONITORING, MessageLogPage.class));
 
         // ── Administration ────────────────────────────────────────────────────
-        pluginRegistry.register(new DefaultPlugin(
-                "connections", "FIX Connections", "bi-hdd-network",
-                NavSection.ADMIN, ConnectionManagementPage.class));
-        pluginRegistry.register(new DefaultPlugin(
+        pluginRegistry.register(gateway);           // registered after order-manager for nav order
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "users", "User Management", "bi-people",
                 NavSection.ADMIN, UserManagementPage.class));
-        pluginRegistry.register(new DefaultPlugin(
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "system-logs", "System Logs", "bi-file-earmark-text",
                 NavSection.ADMIN, SystemLogsPage.class));
+    }
+
+    // ── FIX settings ─────────────────────────────────────────────────────────
+
+    /**
+     * Loads FIX session settings from {@code /fix-gateway.cfg} on the classpath;
+     * falls back to built-in defaults when the file is absent.
+     */
+    private SessionSettings loadFixSettings() {
+        try {
+            InputStream is = getClass().getResourceAsStream("/fix-gateway.cfg");
+            if (is != null) return new SessionSettings(is);
+            return buildDefaultSettings();
+        } catch (ConfigError e) {
+            throw new RuntimeException("Failed to load FIX settings", e);
+        }
+    }
+
+    private SessionSettings buildDefaultSettings() throws ConfigError {
+        String cfg = """
+                [DEFAULT]
+                ConnectionType=initiator
+                ReconnectInterval=5
+                StartTime=00:00:00
+                EndTime=00:00:00
+                HeartBtInt=30
+                UseDataDictionary=N
+                ResetOnLogon=Y
+
+                [SESSION]
+                BeginString=FIX.4.4
+                SenderCompID=SIMULATOR
+                TargetCompID=EXCHANGE
+                SocketConnectHost=localhost
+                SocketConnectPort=9876
+                """;
+        return new SessionSettings(new java.io.ByteArrayInputStream(cfg.getBytes()));
     }
 }
