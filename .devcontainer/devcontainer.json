@@ -33,9 +33,13 @@
   "containerUser": "vscode",
 
   // ── Port forwards ──────────────────────────────────────────────────────────
+  // appPort binds via Docker -p so port 8080 is reachable from the host even
+  // without VS Code open. forwardPorts handles the debug port (VS Code only).
+  "appPort": [
+    8080    // App server — always exposed to host
+  ],
   "forwardPorts": [
-    8080,   // App server
-    5005    // JVM remote debug
+    5005    // JVM remote debug (VS Code only)
   ],
 
   // ── VS Code customisations ─────────────────────────────────────────────────
