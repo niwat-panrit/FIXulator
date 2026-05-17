@@ -91,7 +91,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
         if (settings != null) {
             LiveSessionFacade facade = new LiveSessionFacade();
-            connectionService = new GatewayConnectionService(sessionIDs, facade);
+            connectionService = new GatewayConnectionService(sessionIDs, facade, settings);
             messageLogService = new GatewayMessageLogService();
         }
     }

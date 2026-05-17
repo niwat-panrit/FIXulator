@@ -27,55 +27,34 @@
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td class="fw-semibold">OrderRouter-01</td>
-                        <td><span class="badge bg-secondary">Initiator</span></td>
-                        <td>FIX.4.2</td>
-                        <td class="font-monospace">CLIENT01</td>
-                        <td class="font-monospace">BROKER01</td>
-                        <td class="font-monospace text-muted" style="font-size:0.8rem;">192.168.1.100:9001</td>
-                        <td>30s</td>
-                        <td><span class="badge bg-success">CONNECTED</span></td>
-                        <td>42</td><td>38</td>
-                        <td>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Disconnect</button>
-                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
-                            </div>
+                <tbody wicket:id="tableBody">
+                    <!-- Empty-state row -->
+                    <tr wicket:id="noSessionsRow">
+                        <td colspan="11" class="text-center text-muted py-3">
+                            No FIX sessions configured. Click <strong>Add Connection</strong> to get started.
                         </td>
                     </tr>
-                    <tr>
-                        <td class="fw-semibold">MarketData-Feed</td>
-                        <td><span class="badge bg-secondary">Initiator</span></td>
-                        <td>FIX.4.4</td>
-                        <td class="font-monospace">MDFEED</td>
-                        <td class="font-monospace">MDSERVER</td>
-                        <td class="font-monospace text-muted" style="font-size:0.8rem;">192.168.1.101:9002</td>
-                        <td>30s</td>
-                        <td><span class="badge bg-danger">DISCONNECTED</span></td>
-                        <td>7</td><td>5</td>
+
+                    <!-- One row per configured session -->
+                    <tr wicket:id="sessionRows">
+                        <td class="fw-semibold"><span wicket:id="name">[name]</span></td>
+                        <td><span wicket:id="connectionTypeBadge">[type]</span></td>
+                        <td><span wicket:id="fixVersion">[ver]</span></td>
+                        <td class="font-monospace"><span wicket:id="senderCompID">[sender]</span></td>
+                        <td class="font-monospace"><span wicket:id="targetCompID">[target]</span></td>
+                        <td class="font-monospace text-muted" style="font-size:0.8rem;"><span wicket:id="hostPort">[host:port]</span></td>
+                        <td><span wicket:id="heartbeat">[hb]</span></td>
+                        <td><span wicket:id="statusBadge">[status]</span></td>
+                        <td><span wicket:id="txSeq">[tx]</span></td>
+                        <td><span wicket:id="rxSeq">[rx]</span></td>
                         <td>
                             <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-success" style="font-size:0.75rem;padding:1px 6px;">Connect</button>
-                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="fw-semibold">DropCopy-01</td>
-                        <td><span class="badge bg-dark">Acceptor</span></td>
-                        <td>FIX.4.2</td>
-                        <td class="font-monospace">DRPCPY</td>
-                        <td class="font-monospace">BROKER01</td>
-                        <td class="font-monospace text-muted" style="font-size:0.8rem;">0.0.0.0:9003</td>
-                        <td>30s</td>
-                        <td><span class="badge bg-warning text-dark">LISTENING</span></td>
-                        <td>1</td><td>1</td>
-                        <td>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Stop</button>
-                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
+                                <a wicket:id="connectLink" class="btn btn-outline-success"
+                                   style="font-size:0.75rem;padding:1px 6px;">Connect</a>
+                                <a wicket:id="disconnectLink" class="btn btn-outline-danger"
+                                   style="font-size:0.75rem;padding:1px 6px;">Disconnect</a>
+                                <a wicket:id="resetSeqLink" class="btn btn-outline-secondary"
+                                   style="font-size:0.75rem;padding:1px 6px;">Reset Seq</a>
                             </div>
                         </td>
                     </tr>
@@ -84,7 +63,7 @@
         </div>
     </div>
 
-    <!-- ── Add / Edit Connection Modal ─────────────────── -->
+    <!-- ── Add / Edit Connection Modal (UI placeholder — not yet wired) ──────── -->
     <div class="modal fade" id="connModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -129,10 +108,6 @@
                         <div class="col-3">
                             <label class="form-label">Heartbeat (s)</label>
                             <input type="number" class="form-control form-control-sm" value="30"/>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Begin String</label>
-                            <input type="text" class="form-control form-control-sm bg-light" value="FIX.4.2" readonly/>
                         </div>
                         <div class="col-6">
                             <div class="form-check mt-4">

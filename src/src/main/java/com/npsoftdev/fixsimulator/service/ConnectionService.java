@@ -7,6 +7,30 @@ import java.util.List;
  */
 public interface ConnectionService {
 
+    /**
+     * A snapshot of one FIX session's configuration and live state,
+     * used to populate the Connection Management page.
+     */
+    record SessionDetails(
+            String sessionId,
+            String name,
+            String fixVersion,        // e.g. "FIX.4.4"
+            String senderCompID,
+            String targetCompID,
+            String connectionType,    // "Initiator" | "Acceptor"
+            String hostPort,          // e.g. "localhost:9876"
+            int    heartbeatSecs,
+            String status,
+            int    txSeq,
+            int    rxSeq
+    ) {}
+
+    /**
+     * Returns a {@link SessionDetails} snapshot for every registered session,
+     * combining static configuration with live sequence numbers and status.
+     */
+    List<SessionDetails> listSessions();
+
     /** Returns the IDs of all configured FIX sessions. */
     List<String> listSessionIds();
 

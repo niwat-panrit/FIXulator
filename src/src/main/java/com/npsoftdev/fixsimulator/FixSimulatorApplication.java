@@ -45,6 +45,7 @@ public class FixSimulatorApplication extends WebApplication {
         getCspSettings().blocking()
                 .add(CSPDirective.STYLE_SRC,  CSPDirectiveSrcValue.SELF)
                 .add(CSPDirective.STYLE_SRC,  "https://cdn.jsdelivr.net")
+                .add(CSPDirective.SCRIPT_SRC, CSPDirectiveSrcValue.SELF)
                 .add(CSPDirective.SCRIPT_SRC, "https://cdn.jsdelivr.net")
                 .add(CSPDirective.FONT_SRC,   CSPDirectiveSrcValue.SELF)
                 .add(CSPDirective.FONT_SRC,   "https://cdn.jsdelivr.net");
@@ -53,6 +54,11 @@ public class FixSimulatorApplication extends WebApplication {
         registerBuiltInPlugins();
 
         pluginRegistry.getPlugins().forEach(p -> p.initialize(this));
+
+        // Mount clean URLs for every page that has one
+        pluginRegistry.getPlugins().stream()
+                .filter(p -> p.getPageClass() != null)
+                .forEach(p -> mountPage("/" + p.getId(), p.getPageClass()));
     }
 
     // ── Service accessors ─────────────────────────────────────────────────────

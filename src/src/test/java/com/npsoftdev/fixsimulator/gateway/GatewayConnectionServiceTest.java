@@ -28,7 +28,7 @@ class GatewayConnectionServiceTest {
     @BeforeEach
     void setUp() {
         sessionIDs = new ConcurrentHashMap<>();
-        service    = new GatewayConnectionService(sessionIDs, facade);
+        service    = new GatewayConnectionService(sessionIDs, facade, null);
     }
 
     // ── onCreate / listSessionIds ─────────────────────────────────────────────
