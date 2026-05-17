@@ -54,4 +54,20 @@ public interface ConnectionService {
 
     /** Resets TX and RX sequence numbers to 1. */
     void resetSequence(String sessionId);
+
+    /** Parameters for creating a new FIX session at runtime. */
+    record NewSessionRequest(
+            String  connectionType,   // "Initiator" | "Acceptor"
+            String  fixVersion,       // application version, e.g. "FIX.4.4" or "FIX.5.0"
+            String  beginString,      // transport version: same as fixVersion for FIX 4.x; "FIXT.1.1" for FIX 5.0+
+            String  senderCompID,
+            String  targetCompID,
+            String  host,             // connect host (initiator) or bind host (acceptor)
+            int     port,
+            int     heartbeatSecs,
+            boolean resetOnLogon
+    ) {}
+
+    /** Adds and starts a new FIX session without restarting existing sessions. */
+    void addSession(NewSessionRequest request);
 }

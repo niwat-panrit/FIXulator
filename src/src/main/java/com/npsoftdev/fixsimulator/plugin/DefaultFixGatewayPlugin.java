@@ -8,6 +8,7 @@ import com.npsoftdev.fixsimulator.gateway.LiveSessionFacade;
 import com.npsoftdev.fixsimulator.pages.BasePage;
 import com.npsoftdev.fixsimulator.service.MessageLogService;
 import quickfix.*;
+import quickfix.Dictionary;
 import quickfix.field.MsgType;
 
 import java.util.Collections;
@@ -91,7 +92,8 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
         if (settings != null) {
             LiveSessionFacade facade = new LiveSessionFacade();
-            connectionService = new GatewayConnectionService(sessionIDs, facade, settings);
+            connectionService = new GatewayConnectionService(
+                    sessionIDs, facade, settings, this::addSessionInternal);
             messageLogService = new GatewayMessageLogService();
         }
     }
@@ -197,6 +199,62 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
         if (messageLogService != null)
             messageLogService.record(sessionID, MessageLogService.Direction.RECEIVED, message);
         publishInbound(sessionID, message);
+    }
+
+    // ── Dynamic session creation ──────────────────────────────────────────────
+
+    /**
+     * Adds a new FIX session at runtime using QuickFIX/J's dynamic-session API.
+     * Existing sessions are unaffected — no restart required.
+     */
+    private synchronized void addSessionInternal(
+            com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req) {
+
+        if (initiator == null) throw new IllegalStateException("Initiator not started");
+
+        // FIX 5.0+ uses FIXT.1.1 as the transport-layer BeginString
+        SessionID sid = new SessionID(req.beginString(), req.senderCompID(), req.targetCompID());
+        try {
+            Dictionary dict = new Dictionary();
+            dict.setString("ConnectionType",    req.connectionType().toLowerCase());
+            dict.setString("HeartBtInt",        String.valueOf(req.heartbeatSecs()));
+            dict.setString("ResetOnLogon",      req.resetOnLogon() ? "Y" : "N");
+            dict.setString("UseDataDictionary", "N");
+            dict.setString("CheckLatency",      "N");
+            dict.setString("StartTime",         "00:00:00");
+            dict.setString("EndTime",           "00:00:00");
+            dict.setString("ReconnectInterval", "5");
+            if ("initiator".equalsIgnoreCase(req.connectionType())) {
+                dict.setString("SocketConnectHost", req.host());
+                dict.setString("SocketConnectPort", String.valueOf(req.port()));
+            } else {
+                dict.setString("SocketAcceptPort",  String.valueOf(req.port()));
+            }
+            // FIX 5.0+ requires DefaultApplVerID so QuickFIX/J knows the application version
+            if ("FIXT.1.1".equals(req.beginString())) {
+                dict.setString("DefaultApplVerID", toApplVerID(req.fixVersion()));
+            }
+            settings.set(sid, dict);
+
+            // QuickFIX/J 2.3.1 has no createDynamicSession — stop and restart
+            // the initiator so it picks up the new session from settings.
+            initiator.stop(true);
+            initiator = new SocketInitiator(this, new MemoryStoreFactory(), settings,
+                    new SLF4JLogFactory(settings), new DefaultMessageFactory());
+            initiator.start();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to add FIX session: " + sid, e);
+        }
+    }
+
+    /** Maps a FIX application version string to its QuickFIX/J ApplVerID numeric code. */
+    private static String toApplVerID(String fixVersion) {
+        return switch (fixVersion) {
+            case "FIX.5.0"    -> "7";
+            case "FIX.5.0SP1" -> "8";
+            case "FIX.5.0SP2" -> "9";
+            default            -> "9";   // default to most recent
+        };
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

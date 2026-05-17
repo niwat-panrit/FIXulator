@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * {@link ConnectionService} implementation backed by live QuickFIX/J sessions.
@@ -64,14 +65,28 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     /** May be {@code null} when constructed without settings (e.g. in tests). */
     private final SessionSettings settings;
 
+    /** Delegates dynamic session creation to {@link com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin}. */
+    private final Consumer<NewSessionRequest> sessionAdder;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
+    /** Test-friendly constructor — {@code addSession} is not supported. */
     public GatewayConnectionService(Map<String, SessionID> sessionIDs,
                                     SessionFacade session,
                                     SessionSettings settings) {
-        this.sessionIDs = sessionIDs;
-        this.session    = session;
-        this.settings   = settings;
+        this(sessionIDs, session, settings, req -> {
+            throw new UnsupportedOperationException("addSession not wired");
+        });
+    }
+
+    public GatewayConnectionService(Map<String, SessionID> sessionIDs,
+                                    SessionFacade session,
+                                    SessionSettings settings,
+                                    Consumer<NewSessionRequest> sessionAdder) {
+        this.sessionIDs   = sessionIDs;
+        this.session      = session;
+        this.settings     = settings;
+        this.sessionAdder = sessionAdder;
     }
 
     // ── Callbacks from DefaultFixGatewayPlugin ────────────────────────────────
@@ -164,6 +179,11 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         return resolve(sessionId)
                 .map(session::getExpectedTargetNum)
                 .orElse(0);
+    }
+
+    @Override
+    public void addSession(NewSessionRequest request) {
+        sessionAdder.accept(request);
     }
 
     @Override

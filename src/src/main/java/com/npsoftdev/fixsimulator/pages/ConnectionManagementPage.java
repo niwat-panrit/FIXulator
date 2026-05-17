@@ -2,16 +2,27 @@ package com.npsoftdev.fixsimulator.pages;
 
 import com.npsoftdev.fixsimulator.FixSimulatorApplication;
 import com.npsoftdev.fixsimulator.service.ConnectionService;
+import com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest;
 import com.npsoftdev.fixsimulator.service.ConnectionService.SessionDetails;
 import org.apache.wicket.AttributeModifier;
+import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.AjaxSelfUpdatingTimerBehavior;
+import org.apache.wicket.ajax.form.AjaxFormComponentUpdatingBehavior;
+import org.apache.wicket.ajax.markup.html.form.AjaxButton;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
+import org.apache.wicket.markup.html.form.CheckBox;
+import org.apache.wicket.markup.html.form.DropDownChoice;
+import org.apache.wicket.markup.html.form.Form;
+import org.apache.wicket.markup.html.form.NumberTextField;
+import org.apache.wicket.markup.html.form.TextField;
 import org.apache.wicket.markup.html.link.Link;
 import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.ListView;
+import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.LoadableDetachableModel;
 
+import java.io.Serializable;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -53,6 +64,9 @@ public class ConnectionManagementPage extends BasePage {
             }
         };
         tableBody.add(noSessionsRow);
+
+        // Add-session form (modal)
+        addSessionForm(connectionService, tableBody);
 
         // Session rows
         tableBody.add(new ListView<>("sessionRows", sessionsModel) {
@@ -122,6 +136,93 @@ public class ConnectionManagementPage extends BasePage {
                 });
             }
         });
+    }
+
+    // ── Add-session form ──────────────────────────────────────────────────────
+
+    private void addSessionForm(ConnectionService connectionService,
+                                WebMarkupContainer tableBody) {
+        NewSessionModel model = new NewSessionModel();
+        Form<NewSessionModel> form = new Form<>("addSessionForm",
+                new CompoundPropertyModel<>(model));
+
+        form.add(new DropDownChoice<>("connectionType",
+                List.of("Initiator", "Acceptor")).setRequired(true));
+
+        // BeginString field — auto-updated when fixVersion changes
+        TextField<String> beginStringField = new TextField<>("beginString");
+        beginStringField.setOutputMarkupId(true);
+        beginStringField.setRequired(true);
+        form.add(beginStringField);
+
+        // fixVersion dropdown — updates beginString on change
+        DropDownChoice<String> fixVersionChoice = new DropDownChoice<>("fixVersion",
+                List.of("FIX.4.2", "FIX.4.4", "FIX.5.0", "FIX.5.0SP1", "FIX.5.0SP2"));
+        fixVersionChoice.setRequired(true);
+        fixVersionChoice.add(new AjaxFormComponentUpdatingBehavior("change") {
+            @Override
+            protected void onUpdate(AjaxRequestTarget target) {
+                model.beginString = deriveBeginString(model.fixVersion);
+                target.add(beginStringField);
+            }
+        });
+        form.add(fixVersionChoice);
+
+        form.add(new TextField<String>("senderCompID").setRequired(true));
+        form.add(new TextField<String>("targetCompID").setRequired(true));
+        form.add(new TextField<String>("host").setRequired(true));
+        form.add(new NumberTextField<>("port", Integer.class).setMinimum(1).setMaximum(65535).setRequired(true));
+        form.add(new NumberTextField<>("heartbeatSecs", Integer.class).setMinimum(1));
+        form.add(new CheckBox("resetOnLogon"));
+
+        form.add(new AjaxButton("saveBtn", form) {
+            @Override
+            protected void onSubmit(AjaxRequestTarget target) {
+                if (connectionService != null) {
+                    connectionService.addSession(new NewSessionRequest(
+                            model.connectionType,
+                            model.fixVersion,
+                            model.beginString,
+                            model.senderCompID,
+                            model.targetCompID,
+                            model.host,
+                            model.port,
+                            model.heartbeatSecs,
+                            model.resetOnLogon
+                    ));
+                }
+                target.add(tableBody);
+                target.appendJavaScript(
+                        "bootstrap.Modal.getInstance(document.getElementById('connModal')).hide();");
+            }
+
+            @Override
+            protected void onError(AjaxRequestTarget target) {
+                // Wicket renders validation feedback inline; nothing extra needed
+            }
+        });
+
+        add(form);
+    }
+
+    // ── Form model ────────────────────────────────────────────────────────────
+
+    private static final class NewSessionModel implements Serializable {
+        private static final long serialVersionUID = 1L;
+        String  connectionType = "Initiator";
+        String  fixVersion     = "FIX.4.4";
+        String  beginString    = "FIX.4.4";   // same as fixVersion for FIX 4.x; "FIXT.1.1" for 5.0+
+        String  senderCompID   = "";
+        String  targetCompID   = "";
+        String  host           = "";
+        Integer port           = 9876;
+        Integer heartbeatSecs  = 30;
+        boolean resetOnLogon   = true;
+    }
+
+    private static String deriveBeginString(String fixVersion) {
+        if (fixVersion != null && fixVersion.startsWith("FIX.5")) return "FIXT.1.1";
+        return fixVersion != null ? fixVersion : "FIX.4.4";
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
