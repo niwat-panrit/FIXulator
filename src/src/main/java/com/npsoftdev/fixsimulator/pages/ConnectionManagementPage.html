@@ -4,9 +4,10 @@
 
     <div class="page-header">
         <h4><i class="bi bi-hdd-network me-2 text-primary"></i>FIX Connection Management</h4>
-        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#connModal">
+        <a wicket:id="addConnectionBtn" class="btn btn-sm btn-success"
+           data-bs-toggle="modal" data-bs-target="#connModal" style="cursor:pointer;">
             <i class="bi bi-plus-circle me-1"></i>Add Connection
-        </button>
+        </a>
     </div>
 
     <div class="table-card">
@@ -55,6 +56,8 @@
                                    style="font-size:0.75rem;padding:1px 6px;">Disconnect</a>
                                 <a wicket:id="resetSeqLink" class="btn btn-outline-secondary"
                                    style="font-size:0.75rem;padding:1px 6px;">Reset Seq</a>
+                                <a wicket:id="editLink" class="btn btn-outline-primary"
+                                   style="font-size:0.75rem;padding:1px 6px;cursor:pointer;">Edit</a>
                             </div>
                         </td>
                     </tr>
@@ -63,12 +66,14 @@
         </div>
     </div>
 
-    <!-- ── Add Connection Modal ──────────────────────────────────────────────── -->
+    <!-- ── Add / Edit Connection Modal ──────────────────────────────────────── -->
     <div class="modal fade" id="connModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-hdd-network me-2"></i>Add FIX Connection</h5>
+                    <h5 class="modal-title">
+                        <i class="bi bi-hdd-network me-2"></i><span wicket:id="modalTitle">Add FIX Connection</span>
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form wicket:id="addSessionForm">

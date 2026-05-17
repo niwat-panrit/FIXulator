@@ -11,7 +11,9 @@ import quickfix.*;
 import quickfix.Dictionary;
 import quickfix.field.MsgType;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -93,7 +95,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
         if (settings != null) {
             LiveSessionFacade facade = new LiveSessionFacade();
             connectionService = new GatewayConnectionService(
-                    sessionIDs, facade, settings, this::addSessionInternal);
+                    sessionIDs, facade, settings, this::addSessionInternal, this::updateSessionInternal);
             messageLogService = new GatewayMessageLogService();
         }
     }
@@ -118,6 +120,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
                     new SLF4JLogFactory(settings),
                     new DefaultMessageFactory());
             initiator.start();
+            disableAutoConnect();
         } catch (ConfigError e) {
             throw new RuntimeException("FIX initiator failed to start for plugin '" + id + "'", e);
         }
@@ -242,9 +245,63 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             initiator = new SocketInitiator(this, new MemoryStoreFactory(), settings,
                     new SLF4JLogFactory(settings), new DefaultMessageFactory());
             initiator.start();
+            disableAutoConnect();
         } catch (Exception e) {
             throw new RuntimeException("Failed to add FIX session: " + sid, e);
         }
+    }
+
+    /**
+     * Removes the old session from {@link SessionSettings} and adds the new one,
+     * then restarts the initiator so the change takes effect.
+     */
+    private synchronized void updateSessionInternal(
+            String oldSessionId,
+            com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req) {
+
+        if (initiator == null) throw new IllegalStateException("Initiator not started");
+
+        // Find and remove the old session from settings using the iterator.
+        Iterator<SessionID> it = settings.sectionIterator();
+        while (it.hasNext()) {
+            SessionID sid = it.next();
+            if (sid.toString().equals(oldSessionId)) {
+                removeFromSettings(settings, sid);
+                break;
+            }
+        }
+
+        // Add the new session and restart (reuses existing addSessionInternal logic).
+        addSessionInternal(req);
+    }
+
+    /**
+     * Removes a single session entry from {@link SessionSettings} by accessing its
+     * private {@code sections} map via reflection — QuickFIX/J 2.x has no public
+     * remove API for individual sessions.
+     */
+    private static void removeFromSettings(SessionSettings settings, SessionID sid) {
+        try {
+            Field f = SessionSettings.class.getDeclaredField("sections");
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<Object, Object> sections = (Map<Object, Object>) f.get(settings);
+            sections.remove(sid);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to remove session from QuickFIX/J settings: " + sid, e);
+        }
+    }
+
+    /**
+     * Calls {@link Session#logout()} on every session immediately after the initiator
+     * starts, so sessions stay in DISCONNECTED state until the user explicitly clicks
+     * Connect on the Connection Management page.
+     */
+    private void disableAutoConnect() {
+        initiator.getSessions().forEach(sid -> {
+            Session session = Session.lookupSession(sid);
+            if (session != null) session.logout();
+        });
     }
 
     /** Maps a FIX application version string to its QuickFIX/J ApplVerID numeric code. */

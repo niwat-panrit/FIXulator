@@ -70,4 +70,7 @@ public interface ConnectionService {
 
     /** Adds and starts a new FIX session without restarting existing sessions. */
     void addSession(NewSessionRequest request);
+
+    /** Removes the existing session identified by {@code sessionId} and replaces it with a new one. */
+    void updateSession(String sessionId, NewSessionRequest request);
 }

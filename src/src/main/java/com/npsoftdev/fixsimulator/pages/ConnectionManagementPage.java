@@ -8,6 +8,7 @@ import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.AjaxSelfUpdatingTimerBehavior;
 import org.apache.wicket.ajax.form.AjaxFormComponentUpdatingBehavior;
+import org.apache.wicket.ajax.markup.html.AjaxLink;
 import org.apache.wicket.ajax.markup.html.form.AjaxButton;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
@@ -29,7 +30,7 @@ import java.util.List;
 
 /**
  * Displays all configured FIX sessions with their live status and sequence numbers,
- * and provides connect / disconnect / reset-sequence actions.
+ * and provides connect / disconnect / reset-sequence / edit actions.
  */
 public class ConnectionManagementPage extends BasePage {
 
@@ -65,8 +66,27 @@ public class ConnectionManagementPage extends BasePage {
         };
         tableBody.add(noSessionsRow);
 
-        // Add-session form (modal)
-        addSessionForm(connectionService, tableBody);
+        // Shared model for the add/edit form
+        NewSessionModel model = new NewSessionModel();
+
+        // Dynamic modal title label (sits outside the <form> in the modal header)
+        Label modalTitle = new Label("modalTitle", () -> model.modalTitle);
+        modalTitle.setOutputMarkupId(true);
+        add(modalTitle);
+
+        // "Add Connection" button — resets form to create-mode then opens modal
+        add(new AjaxLink<Void>("addConnectionBtn") {
+            @Override
+            public void onClick(AjaxRequestTarget target) {
+                model.resetToDefaults();
+                target.add(modalTitle);
+                // form is re-rendered via the modal open; fields pull from the model
+            }
+        });
+
+        // Add / edit session form (modal)
+        Form<NewSessionModel> form = buildSessionForm(model, connectionService, tableBody, modalTitle);
+        add(form);
 
         // Session rows
         tableBody.add(new ListView<>("sessionRows", sessionsModel) {
@@ -134,17 +154,30 @@ public class ConnectionManagementPage extends BasePage {
                             connectionService.resetSequence(s.sessionId());
                     }
                 });
+
+                // Edit link — pre-populates the form and opens the modal
+                item.add(new AjaxLink<Void>("editLink") {
+                    @Override
+                    public void onClick(AjaxRequestTarget target) {
+                        model.populateFrom(s);
+                        target.add(form, modalTitle);
+                        target.appendJavaScript(
+                                "new bootstrap.Modal(document.getElementById('connModal')).show();");
+                    }
+                });
             }
         });
     }
 
-    // ── Add-session form ──────────────────────────────────────────────────────
+    // ── Add / edit session form ───────────────────────────────────────────────
 
-    private void addSessionForm(ConnectionService connectionService,
-                                WebMarkupContainer tableBody) {
-        NewSessionModel model = new NewSessionModel();
+    private Form<NewSessionModel> buildSessionForm(NewSessionModel model,
+                                                   ConnectionService connectionService,
+                                                   WebMarkupContainer tableBody,
+                                                   Label modalTitle) {
         Form<NewSessionModel> form = new Form<>("addSessionForm",
                 new CompoundPropertyModel<>(model));
+        form.setOutputMarkupId(true);
 
         form.add(new DropDownChoice<>("connectionType",
                 List.of("Initiator", "Acceptor")).setRequired(true));
@@ -179,7 +212,7 @@ public class ConnectionManagementPage extends BasePage {
             @Override
             protected void onSubmit(AjaxRequestTarget target) {
                 if (connectionService != null) {
-                    connectionService.addSession(new NewSessionRequest(
+                    NewSessionRequest req = new NewSessionRequest(
                             model.connectionType,
                             model.fixVersion,
                             model.beginString,
@@ -189,7 +222,14 @@ public class ConnectionManagementPage extends BasePage {
                             model.port,
                             model.heartbeatSecs,
                             model.resetOnLogon
-                    ));
+                    );
+                    if (model.editingSessionId != null) {
+                        connectionService.updateSession(model.editingSessionId, req);
+                    } else {
+                        connectionService.addSession(req);
+                    }
+                    model.resetToDefaults();
+                    target.add(modalTitle);
                 }
                 target.add(tableBody);
                 target.appendJavaScript(
@@ -202,22 +242,72 @@ public class ConnectionManagementPage extends BasePage {
             }
         });
 
-        add(form);
+        return form;
     }
 
     // ── Form model ────────────────────────────────────────────────────────────
 
     private static final class NewSessionModel implements Serializable {
         private static final long serialVersionUID = 1L;
+
+        /** Non-null when editing an existing session; null when creating a new one. */
+        String  editingSessionId = null;
+        String  modalTitle       = "Add FIX Connection";
+
         String  connectionType = "Initiator";
         String  fixVersion     = "FIX.4.4";
-        String  beginString    = "FIX.4.4";   // same as fixVersion for FIX 4.x; "FIXT.1.1" for 5.0+
+        String  beginString    = "FIX.4.4";
         String  senderCompID   = "";
         String  targetCompID   = "";
         String  host           = "";
         Integer port           = 9876;
         Integer heartbeatSecs  = 30;
         boolean resetOnLogon   = true;
+
+        void resetToDefaults() {
+            editingSessionId = null;
+            modalTitle       = "Add FIX Connection";
+            connectionType   = "Initiator";
+            fixVersion       = "FIX.4.4";
+            beginString      = "FIX.4.4";
+            senderCompID     = "";
+            targetCompID     = "";
+            host             = "";
+            port             = 9876;
+            heartbeatSecs    = 30;
+            resetOnLogon     = true;
+        }
+
+        void populateFrom(SessionDetails s) {
+            editingSessionId = s.sessionId();
+            modalTitle       = "Edit FIX Connection";
+            connectionType   = s.connectionType();
+            senderCompID     = s.senderCompID();
+            targetCompID     = s.targetCompID();
+            heartbeatSecs    = s.heartbeatSecs();
+            resetOnLogon     = true;
+
+            // s.fixVersion() is the QuickFIX/J BeginString (e.g. "FIX.4.4" or "FIXT.1.1")
+            if (s.fixVersion().startsWith("FIXT")) {
+                beginString = "FIXT.1.1";
+                fixVersion  = "FIX.5.0SP2";   // best guess; exact app version not stored
+            } else {
+                beginString = s.fixVersion();
+                fixVersion  = s.fixVersion();
+            }
+
+            // Parse "host:port" or "0.0.0.0:port"
+            String hp = s.hostPort();
+            int colonIdx = hp.lastIndexOf(':');
+            if (colonIdx >= 0) {
+                host = hp.substring(0, colonIdx);
+                try { port = Integer.parseInt(hp.substring(colonIdx + 1)); }
+                catch (NumberFormatException e) { port = 9876; }
+            } else {
+                host = hp;
+                port = 9876;
+            }
+        }
     }
 
     private static String deriveBeginString(String fixVersion) {

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -68,25 +69,30 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     /** Delegates dynamic session creation to {@link com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin}. */
     private final Consumer<NewSessionRequest> sessionAdder;
 
+    /** Delegates session update (remove old + add new) to {@link com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin}. */
+    private final BiConsumer<String, NewSessionRequest> sessionUpdater;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    /** Test-friendly constructor — {@code addSession} is not supported. */
+    /** Test-friendly constructor — {@code addSession} and {@code updateSession} are not supported. */
     public GatewayConnectionService(Map<String, SessionID> sessionIDs,
                                     SessionFacade session,
                                     SessionSettings settings) {
-        this(sessionIDs, session, settings, req -> {
-            throw new UnsupportedOperationException("addSession not wired");
-        });
+        this(sessionIDs, session, settings,
+                req -> { throw new UnsupportedOperationException("addSession not wired"); },
+                (sid, req) -> { throw new UnsupportedOperationException("updateSession not wired"); });
     }
 
     public GatewayConnectionService(Map<String, SessionID> sessionIDs,
                                     SessionFacade session,
                                     SessionSettings settings,
-                                    Consumer<NewSessionRequest> sessionAdder) {
-        this.sessionIDs   = sessionIDs;
-        this.session      = session;
-        this.settings     = settings;
-        this.sessionAdder = sessionAdder;
+                                    Consumer<NewSessionRequest> sessionAdder,
+                                    BiConsumer<String, NewSessionRequest> sessionUpdater) {
+        this.sessionIDs     = sessionIDs;
+        this.session        = session;
+        this.settings       = settings;
+        this.sessionAdder   = sessionAdder;
+        this.sessionUpdater = sessionUpdater;
     }
 
     // ── Callbacks from DefaultFixGatewayPlugin ────────────────────────────────
@@ -184,6 +190,14 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     @Override
     public void addSession(NewSessionRequest request) {
         sessionAdder.accept(request);
+    }
+
+    @Override
+    public void updateSession(String sessionId, NewSessionRequest request) {
+        // Remove stale in-memory state so the restarted initiator registers fresh entries.
+        states.remove(sessionId);
+        sessionIDs.remove(sessionId);
+        sessionUpdater.accept(sessionId, request);
     }
 
     @Override

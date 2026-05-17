@@ -5,11 +5,19 @@ import quickfix.Session;
 import quickfix.SessionID;
 import quickfix.SessionNotFound;
 
+import java.io.Serializable;
+
 /**
  * Production {@link SessionFacade} that delegates to the live QuickFIX/J
  * {@link Session} static methods.
+ *
+ * <p>Must be serializable because {@link GatewayConnectionService} (which holds a
+ * reference to this) is captured by Wicket page components that Wicket serialises
+ * to its page store on every request.</p>
  */
-public class LiveSessionFacade implements SessionFacade {
+public class LiveSessionFacade implements SessionFacade, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     @Override
     public void logon(SessionID sessionID) {
