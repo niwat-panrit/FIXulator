@@ -16,7 +16,12 @@ import org.apache.wicket.protocol.http.WebApplication;
 import quickfix.ConfigError;
 import quickfix.SessionSettings;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class FixSimulatorApplication extends WebApplication {
 
@@ -86,10 +91,11 @@ public class FixSimulatorApplication extends WebApplication {
 
     private void registerBuiltInPlugins() {
         // The gateway is instantiated first so we can hand it to the order manager.
+        Path cfgPath = resolveConfigFilePath();
         DefaultFixGatewayPlugin gateway = new DefaultFixGatewayPlugin(
                 "connections", "FIX Connections", "bi-hdd-network",
                 NavSection.ADMIN, ConnectionManagementPage.class,
-                loadFixSettings());
+                loadFixSettings(cfgPath), cfgPath);
 
         // ── Overview ──────────────────────────────────────────────────────────
         pluginRegistry.register(new DefaultFixGatewayPlugin(
@@ -124,15 +130,40 @@ public class FixSimulatorApplication extends WebApplication {
     // ── FIX settings ─────────────────────────────────────────────────────────
 
     /**
-     * Loads FIX session settings from {@code /fix-gateway.cfg} on the classpath;
-     * falls back to built-in defaults when the file is absent.
+     * Resolves the writable path for {@code fix-gateway.cfg}.
+     *
+     * <ol>
+     *   <li>If the classpath resource resolves to an actual file on disk (typical
+     *       in development with {@code mvn jetty:run}), that file is used so that
+     *       edits via the UI are immediately visible in the source tree.</li>
+     *   <li>Otherwise falls back to {@code fix-gateway.cfg} in the working directory.</li>
+     * </ol>
      */
-    private SessionSettings loadFixSettings() {
+    private Path resolveConfigFilePath() {
         try {
+            URL url = getClass().getResource("/fix-gateway.cfg");
+            if (url != null && "file".equals(url.getProtocol())) {
+                return Paths.get(url.toURI());
+            }
+        } catch (Exception ignored) {}
+        return Paths.get(System.getProperty("user.dir"), "fix-gateway.cfg");
+    }
+
+    /**
+     * Loads FIX session settings from the resolved config file path, then from
+     * the classpath resource, then from built-in defaults — whichever is found first.
+     */
+    private SessionSettings loadFixSettings(Path configFilePath) {
+        try {
+            if (configFilePath != null && Files.exists(configFilePath)) {
+                try (InputStream is = Files.newInputStream(configFilePath)) {
+                    return new SessionSettings(is);
+                }
+            }
             InputStream is = getClass().getResourceAsStream("/fix-gateway.cfg");
             if (is != null) return new SessionSettings(is);
             return buildDefaultSettings();
-        } catch (ConfigError e) {
+        } catch (ConfigError | IOException e) {
             throw new RuntimeException("Failed to load FIX settings", e);
         }
     }

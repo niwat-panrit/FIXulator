@@ -6,9 +6,11 @@ import quickfix.SessionSettings;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -74,6 +76,12 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     /** Delegates session deletion to {@link com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin}. */
     private final Consumer<String> sessionDeleter;
+
+    /**
+     * Tracks which sessions the user has explicitly connected (via the Connect button).
+     * Each session has its own dedicated initiator, so this is purely informational.
+     */
+    private final Set<String> enabledSessions = ConcurrentHashMap.newKeySet();
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -171,11 +179,13 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     @Override
     public void connect(String sessionId) {
+        enabledSessions.add(sessionId);
         resolve(sessionId).ifPresent(session::logon);
     }
 
     @Override
     public void disconnect(String sessionId) {
+        enabledSessions.remove(sessionId);
         resolve(sessionId).ifPresent(session::logout);
     }
 
@@ -203,6 +213,7 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         // Remove stale in-memory state so the restarted initiator registers fresh entries.
         states.remove(sessionId);
         sessionIDs.remove(sessionId);
+        enabledSessions.remove(sessionId);
         sessionUpdater.accept(sessionId, request);
     }
 
@@ -215,8 +226,14 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         // Purge local state before the plugin restarts the initiator.
         states.remove(sessionId);
         sessionIDs.remove(sessionId);
+        enabledSessions.remove(sessionId);
         // Delegate archive + QFJ settings removal + initiator restart to the plugin.
         sessionDeleter.accept(sessionId);
+    }
+
+    /** Returns the set of session IDs the user has explicitly connected (via Connect button). */
+    public Set<String> getEnabledSessionIds() {
+        return Collections.unmodifiableSet(enabledSessions);
     }
 
     @Override

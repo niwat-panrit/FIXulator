@@ -14,13 +14,11 @@ import quickfix.field.MsgType;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
@@ -39,13 +37,13 @@ import java.util.function.Consumer;
  *       {@link FixMessageListener FixMessageListeners} so that higher-level
  *       plugins (e.g. {@link DefaultOrderManagerPlugin}) can react without being
  *       coupled to the transport layer.</li>
+ *   <li>Persists session configuration to {@code fix-gateway.cfg} after every
+ *       add / update / delete so that changes survive application restarts.</li>
  * </ul>
  *
- * <p>Order and trade concerns are intentionally <em>not</em> handled here;
- * register a {@link DefaultOrderManagerPlugin} to process those messages.</p>
- *
- * <p>When constructed without {@link SessionSettings} (nav-only constructor) the
- * FIX engine is never started — the plugin behaves as a plain nav entry.</p>
+ * <p>Each FIX session is managed by its own dedicated {@link SocketInitiator}.
+ * This means adding, editing, or deleting one session has zero impact on any
+ * other session — no shared restart, no dropped connections.</p>
  */
 public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
@@ -59,13 +57,29 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     private final Class<? extends BasePage> pageClass;
 
     // ── FIX (null when nav-only) ──────────────────────────────────────────────
-    /** Transient: {@link quickfix.SessionSettings} is not serializable. Re-obtained from the live initiator at runtime. */
+
+    /**
+     * Master settings used only for persistence — never passed to a running initiator.
+     * Transient: {@link SessionSettings} is not serializable.
+     */
     private transient SessionSettings settings;
 
     /**
-     * Shared session-ID registry populated from {@link #onCreate}/{@link #onLogon}
-     * callbacks.  Exposed via {@link #getSessionIDs()} so that dependent plugins
-     * (like {@link DefaultOrderManagerPlugin}) can share the same live map.
+     * Path to {@code fix-gateway.cfg}; written after every add / update / delete.
+     * Transient so Wicket's page store never tries to serialise it.
+     */
+    private transient String configFilePath;
+
+    /**
+     * One dedicated {@link Initiator} per session ID.  Editing session X stops
+     * and replaces only X's initiator — all other initiators keep running.
+     * Transient: Initiator is not serializable.
+     */
+    private transient Map<String, Initiator> sessionInitiators;
+
+    /**
+     * Shared session-ID registry populated from {@link #onCreate} callbacks.
+     * Exposed via {@link #getSessionIDs()} so dependent plugins can share it.
      */
     private final Map<String, SessionID> sessionIDs = new ConcurrentHashMap<>();
 
@@ -75,34 +89,41 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     private GatewayConnectionService connectionService;
     private GatewayMessageLogService messageLogService;
 
-    /** Not serialisable — created fresh on each application start. */
-    private transient Initiator initiator;
-
     // ── Constructors ──────────────────────────────────────────────────────────
 
-    /** Nav-only — no FIX engine, identical behaviour to the old {@code DefaultPlugin}. */
+    /** Nav-only — no FIX engine. */
     public DefaultFixGatewayPlugin(String id, String label, String iconClass,
                                     NavSection section, Class<? extends BasePage> pageClass) {
-        this(id, label, iconClass, section, pageClass, null);
+        this(id, label, iconClass, section, pageClass, null, null);
     }
 
-    /**
-     * Full-gateway constructor.  Pass non-null {@link SessionSettings} to
-     * activate the FIX engine when {@link #initialize} is called.
-     */
+    /** Full-gateway constructor without persistence path. */
     public DefaultFixGatewayPlugin(String id, String label, String iconClass,
                                     NavSection section, Class<? extends BasePage> pageClass,
                                     SessionSettings settings) {
-        this.id        = id;
-        this.label     = label;
-        this.iconClass = iconClass;
-        this.section   = section;
-        this.pageClass = pageClass;
-        this.settings  = settings;
+        this(id, label, iconClass, section, pageClass, settings, null);
+    }
+
+    /**
+     * Full-gateway constructor with persistence path.
+     *
+     * @param configFilePath path to {@code fix-gateway.cfg}; changes are written here
+     *                       after every add / update / delete.  May be {@code null}
+     *                       to disable persistence.
+     */
+    public DefaultFixGatewayPlugin(String id, String label, String iconClass,
+                                    NavSection section, Class<? extends BasePage> pageClass,
+                                    SessionSettings settings, Path configFilePath) {
+        this.id             = id;
+        this.label          = label;
+        this.iconClass      = iconClass;
+        this.section        = section;
+        this.pageClass      = pageClass;
+        this.settings       = settings;
+        this.configFilePath = configFilePath != null ? configFilePath.toString() : null;
 
         if (settings != null) {
             LiveSessionFacade facade = new LiveSessionFacade();
-            // Cast method references to Serializable so Wicket can serialise the page store.
             connectionService = new GatewayConnectionService(
                     sessionIDs, facade, settings,
                     (Serializable & Consumer<com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest>) this::addSessionInternal,
@@ -124,17 +145,19 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     public void initialize(FixSimulatorApplication app) {
         if (settings == null) return;   // nav-only — nothing to start
 
-        try {
-            initiator = new SocketInitiator(
-                    this,
-                    new MemoryStoreFactory(),
-                    settings,
-                    new SLF4JLogFactory(settings),
-                    new DefaultMessageFactory());
-            initiator.start();
-            disableAutoConnect();
-        } catch (ConfigError e) {
-            throw new RuntimeException("FIX initiator failed to start for plugin '" + id + "'", e);
+        sessionInitiators = new ConcurrentHashMap<>();
+
+        // Start one dedicated initiator per configured session.
+        List<SessionID> sids = new ArrayList<>();
+        Iterator<SessionID> it = settings.sectionIterator();
+        while (it.hasNext()) sids.add(it.next());
+
+        for (SessionID sid : sids) {
+            try {
+                startSessionInitiator(sid, buildPerSessionSettings(sid));
+            } catch (ConfigError e) {
+                throw new RuntimeException("FIX initiator failed to start for session: " + sid, e);
+            }
         }
 
         app.setConnectionService(connectionService);
@@ -143,10 +166,6 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
     // ── Listener registration ─────────────────────────────────────────────────
 
-    /**
-     * Registers a listener that will be notified on every application-level
-     * FIX message.  Safe to call before {@link #initialize}.
-     */
     public void addMessageListener(FixMessageListener listener) {
         messageListeners.add(listener);
     }
@@ -156,15 +175,10 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     public GatewayConnectionService getConnectionService() { return connectionService; }
     public GatewayMessageLogService getMessageLogService() { return messageLogService; }
 
-    /**
-     * Returns the live session-ID map (same reference used internally).
-     * Dependent plugins may share this map to resolve session-ID strings.
-     */
     public Map<String, SessionID> getSessionIDs() {
         return Collections.unmodifiableMap(sessionIDs);
     }
 
-    /** Exposed for testing — allows tests to retrieve and drive registered listeners. */
     public List<FixMessageListener> getMessageListeners() {
         return Collections.unmodifiableList(messageListeners);
     }
@@ -216,145 +230,49 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
         publishInbound(sessionID, message);
     }
 
-    // ── Dynamic session creation ──────────────────────────────────────────────
+    // ── Dynamic session management ────────────────────────────────────────────
 
     /**
-     * Adds a new FIX session at runtime using QuickFIX/J's dynamic-session API.
-     * Existing sessions are unaffected — no restart required.
+     * Adds a new session by starting a dedicated initiator for it.
+     * All existing sessions are completely unaffected.
      */
     private synchronized void addSessionInternal(
             com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req) {
 
-        if (initiator == null) throw new IllegalStateException("Initiator not started");
-
-        // FIX 5.0+ uses FIXT.1.1 as the transport-layer BeginString
         SessionID sid = new SessionID(req.beginString(), req.senderCompID(), req.targetCompID());
-        try {
-            Dictionary dict = new Dictionary();
-            dict.setString("ConnectionType",    req.connectionType().toLowerCase());
-            dict.setString("HeartBtInt",        String.valueOf(req.heartbeatSecs()));
-            dict.setString("ResetOnLogon",      req.resetOnLogon() ? "Y" : "N");
-            dict.setString("UseDataDictionary", "N");
-            dict.setString("CheckLatency",      "N");
-            dict.setString("StartTime",         "00:00:00");
-            dict.setString("EndTime",           "00:00:00");
-            dict.setString("ReconnectInterval", "5");
-            if ("initiator".equalsIgnoreCase(req.connectionType())) {
-                dict.setString("SocketConnectHost", req.host());
-                dict.setString("SocketConnectPort", String.valueOf(req.port()));
-            } else {
-                dict.setString("SocketAcceptPort",  String.valueOf(req.port()));
-            }
-            // FIX 5.0+ requires DefaultApplVerID so QuickFIX/J knows the application version
-            if ("FIXT.1.1".equals(req.beginString())) {
-                dict.setString("DefaultApplVerID", toApplVerID(req.fixVersion()));
-            }
-            settings.set(sid, dict);
 
-            // QuickFIX/J 2.3.1 has no createDynamicSession — stop and restart
-            // the initiator so it picks up the new session from settings.
-            initiator.stop(true);
-            initiator = new SocketInitiator(this, new MemoryStoreFactory(), settings,
-                    new SLF4JLogFactory(settings), new DefaultMessageFactory());
-            initiator.start();
-            disableAutoConnect();
+        // Register in master settings for persistence.
+        try {
+            settings.set(sid, buildSessionDict(req));
         } catch (Exception e) {
-            throw new RuntimeException("Failed to add FIX session: " + sid, e);
-        }
-    }
-
-    /**
-     * Disconnects the given session (defensive), archives any on-disk QuickFIX/J
-     * session files, removes the session from {@link SessionSettings}, and restarts
-     * the initiator so the change takes effect immediately.
-     */
-    private synchronized void deleteSessionInternal(String sessionId) {
-
-        if (initiator == null) throw new IllegalStateException("Initiator not started");
-
-        // Locate the SessionID in the live settings (before removal).
-        SessionID targetSid = null;
-        Iterator<SessionID> it = settings.sectionIterator();
-        while (it.hasNext()) {
-            SessionID sid = it.next();
-            if (sid.toString().equals(sessionId)) {
-                targetSid = sid;
-                break;
-            }
+            throw new RuntimeException("Failed to configure FIX session: " + sid, e);
         }
 
-        // Defensively log out — GatewayConnectionService already sent a logout, but
-        // the session may have started reconnecting in the brief interval since then.
-        if (targetSid != null) {
-            Session qfSession = Session.lookupSession(targetSid);
-            if (qfSession != null) qfSession.logout();
-        }
-
-        // Archive any on-disk QuickFIX/J session files (no-op with MemoryStoreFactory).
-        archiveSessionFiles(sessionId, settings);
-
-        // Remove from settings then restart the initiator.
-        if (targetSid != null) removeFromSettings(settings, targetSid);
-
+        // Start a dedicated initiator for this session only.
         try {
-            initiator.stop(true);
-            initiator = new SocketInitiator(this, new MemoryStoreFactory(), settings,
-                    new SLF4JLogFactory(settings), new DefaultMessageFactory());
-            initiator.start();
-            disableAutoConnect();
+            startSessionInitiator(sid, buildPerSessionSettings(req));
         } catch (ConfigError e) {
-            throw new RuntimeException(
-                    "Failed to restart initiator after deleting session: " + sessionId, e);
+            throw new RuntimeException("Failed to start FIX initiator for session: " + sid, e);
         }
+
+        persistSettings();
     }
 
     /**
-     * Renames every QuickFIX/J FileStore file whose name starts with the session's
-     * file prefix by appending {@code .deleted.{unix_timestamp}}.  This preserves
-     * the last sequence-number state while clearly marking the session as deleted.
+     * Replaces an existing session with a new configuration by stopping only that
+     * session's initiator and starting a new one.
      *
-     * <p>This is a best-effort operation: if {@code FileStorePath} is not configured
-     * (e.g. when using {@code MemoryStoreFactory}) or the files do not exist, the
-     * method returns silently.</p>
-     */
-    private static void archiveSessionFiles(String sessionId, SessionSettings settings) {
-        try {
-            String fileStorePath = settings.getString("FileStorePath");
-            Path dir = Paths.get(fileStorePath);
-            if (!Files.isDirectory(dir)) return;
-
-            // QuickFIX/J derives the file prefix from SessionID.toString() by replacing
-            // reserved filesystem characters with '-'.
-            String filePrefix = sessionId.replaceAll("[:/\\\\*?\"<>|]", "-");
-            long   timestamp  = System.currentTimeMillis() / 1000;
-
-            try (var stream = Files.list(dir)) {
-                stream.filter(p -> p.getFileName().toString().startsWith(filePrefix))
-                      .forEach(path -> {
-                          try {
-                              Files.move(path, path.resolveSibling(
-                                      path.getFileName() + ".deleted." + timestamp));
-                          } catch (IOException ex) {
-                              // Best-effort — log and continue.
-                          }
-                      });
-            }
-        } catch (Exception ignored) {
-            // FileStorePath absent or inaccessible — nothing to archive.
-        }
-    }
-
-    /**
-     * Removes the old session from {@link SessionSettings} and adds the new one,
-     * then restarts the initiator so the change takes effect.
+     * <p>All other sessions keep running without interruption.</p>
      */
     private synchronized void updateSessionInternal(
             String oldSessionId,
             com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req) {
 
-        if (initiator == null) throw new IllegalStateException("Initiator not started");
+        // Stop only the initiator for the old session — others are untouched.
+        Initiator old = sessionInitiators.remove(oldSessionId);
+        if (old != null) old.stop(true);
 
-        // Find and remove the old session from settings using the iterator.
+        // Remove old session from master settings.
         Iterator<SessionID> it = settings.sectionIterator();
         while (it.hasNext()) {
             SessionID sid = it.next();
@@ -364,15 +282,261 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             }
         }
 
-        // Add the new session and restart (reuses existing addSessionInternal logic).
-        addSessionInternal(req);
+        // Register the new session in master settings.
+        SessionID newSid = new SessionID(req.beginString(), req.senderCompID(), req.targetCompID());
+        try {
+            settings.set(newSid, buildSessionDict(req));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to configure updated FIX session: " + newSid, e);
+        }
+
+        // Start a dedicated initiator for the new session configuration.
+        try {
+            startSessionInitiator(newSid, buildPerSessionSettings(req));
+        } catch (ConfigError e) {
+            throw new RuntimeException("Failed to start FIX initiator for session: " + newSid, e);
+        }
+
+        persistSettings();
     }
 
     /**
-     * Removes a single session entry from {@link SessionSettings} by accessing its
-     * private {@code sections} map via reflection — QuickFIX/J 2.x has no public
-     * remove API for individual sessions.
+     * Disconnects and permanently removes one session by stopping only that
+     * session's initiator.
+     *
+     * <p>All other sessions keep running without interruption.</p>
      */
+    private synchronized void deleteSessionInternal(String sessionId) {
+
+        // Stop only this session's initiator — others are untouched.
+        Initiator init = sessionInitiators.remove(sessionId);
+        if (init != null) {
+            archiveSessionFiles(sessionId, settings);
+            init.stop(true);
+        }
+
+        // Remove from master settings.
+        Iterator<SessionID> it = settings.sectionIterator();
+        while (it.hasNext()) {
+            SessionID sid = it.next();
+            if (sid.toString().equals(sessionId)) {
+                removeFromSettings(settings, sid);
+                break;
+            }
+        }
+
+        persistSettings();
+    }
+
+    // ── Per-session initiator helper ──────────────────────────────────────────
+
+    /**
+     * Creates, starts, and registers a dedicated {@link SocketInitiator} for the
+     * given session.  The session is left in the logged-out state so that the user
+     * explicitly initiates the first connection via the UI Connect button.
+     *
+     * <p>Because {@link SocketInitiator#start()} calls {@link Application#onCreate}
+     * synchronously (via the {@link Session} constructor), the session is already
+     * present in QFJ's static registry and in {@link #sessionIDs} by the time this
+     * method returns.  We can therefore safely call {@link Session#logout()} to
+     * suppress auto-connect before the initiator's background threads fire.</p>
+     */
+    private void startSessionInitiator(SessionID sid, SessionSettings perSessionSettings)
+            throws ConfigError {
+
+        Initiator init = new SocketInitiator(
+                this,
+                new MemoryStoreFactory(),
+                perSessionSettings,
+                new SLF4JLogFactory(perSessionSettings),
+                new DefaultMessageFactory());
+
+        init.start();
+
+        // Prevent the initiator from auto-connecting — the user decides when to connect.
+        Session qfSession = Session.lookupSession(sid);
+        if (qfSession != null) qfSession.logout();
+
+        sessionInitiators.put(sid.toString(), init);
+    }
+
+    // ── Per-session settings builders ─────────────────────────────────────────
+
+    /**
+     * Builds a standalone {@link SessionSettings} for one session by extracting
+     * its configuration from the master settings.  Used during {@link #initialize}.
+     */
+    private SessionSettings buildPerSessionSettings(SessionID sid) throws ConfigError {
+        StringBuilder cfg = new StringBuilder();
+        appendDefaultSection(cfg);
+        cfg.append("\n[SESSION]\n");
+        cfg.append("BeginString=").append(sid.getBeginString()).append("\n");
+        cfg.append("SenderCompID=").append(sid.getSenderCompID()).append("\n");
+        cfg.append("TargetCompID=").append(sid.getTargetCompID()).append("\n");
+        for (String key : List.of("ConnectionType", "HeartBtInt", "ResetOnLogon",
+                                  "SocketConnectHost", "SocketConnectPort",
+                                  "SocketAcceptPort", "DefaultApplVerID")) {
+            try {
+                cfg.append(key).append("=").append(settings.getString(sid, key)).append("\n");
+            } catch (Exception ignored) {}
+        }
+        return new SessionSettings(
+                new java.io.ByteArrayInputStream(cfg.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /**
+     * Builds a standalone {@link SessionSettings} from a {@link com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest}.
+     * Used when adding or updating a session.
+     */
+    private static SessionSettings buildPerSessionSettings(
+            com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req)
+            throws ConfigError {
+
+        StringBuilder cfg = new StringBuilder();
+        appendDefaultSection(cfg);
+        cfg.append("\n[SESSION]\n");
+        cfg.append("BeginString=").append(req.beginString()).append("\n");
+        cfg.append("SenderCompID=").append(req.senderCompID()).append("\n");
+        cfg.append("TargetCompID=").append(req.targetCompID()).append("\n");
+        cfg.append("ConnectionType=").append(req.connectionType().toLowerCase()).append("\n");
+        cfg.append("HeartBtInt=").append(req.heartbeatSecs()).append("\n");
+        cfg.append("ResetOnLogon=").append(req.resetOnLogon() ? "Y" : "N").append("\n");
+        if ("initiator".equalsIgnoreCase(req.connectionType())) {
+            cfg.append("SocketConnectHost=").append(req.host()).append("\n");
+            cfg.append("SocketConnectPort=").append(req.port()).append("\n");
+        } else {
+            cfg.append("SocketAcceptPort=").append(req.port()).append("\n");
+        }
+        if ("FIXT.1.1".equals(req.beginString())) {
+            cfg.append("DefaultApplVerID=").append(toApplVerID(req.fixVersion())).append("\n");
+        }
+        return new SessionSettings(
+                new java.io.ByteArrayInputStream(cfg.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static void appendDefaultSection(StringBuilder cfg) {
+        cfg.append("[DEFAULT]\n");
+        cfg.append("ReconnectInterval=5\n");
+        cfg.append("StartTime=00:00:00\n");
+        cfg.append("EndTime=00:00:00\n");
+        cfg.append("UseDataDictionary=N\n");
+        cfg.append("CheckLatency=N\n");
+    }
+
+    // ── Persistence ──────────────────────────────────────────────────────────
+
+    /**
+     * Writes all sessions from the master {@link SessionSettings} to
+     * {@code fix-gateway.cfg} so that configuration survives restarts.
+     */
+    private void persistSettings() {
+        if (configFilePath == null || settings == null) return;
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("# FIX Gateway configuration for FIX Simulator\n");
+            sb.append("# Auto-generated by Connection Management — do not edit while the app is running.\n\n");
+
+            sb.append("[DEFAULT]\n");
+            appendDefaultKey(sb, "ConnectionType",    "initiator");
+            appendDefaultKey(sb, "ReconnectInterval", "5");
+            appendDefaultKey(sb, "StartTime",         "00:00:00");
+            appendDefaultKey(sb, "EndTime",           "00:00:00");
+            appendDefaultKey(sb, "HeartBtInt",        "30");
+            appendDefaultKey(sb, "UseDataDictionary", "N");
+            appendDefaultKey(sb, "ResetOnLogon",      "Y");
+            appendDefaultKey(sb, "CheckLatency",      "N");
+            appendDefaultKey(sb, "SocketConnectHost", null);
+            sb.append('\n');
+
+            Iterator<SessionID> it = settings.sectionIterator();
+            while (it.hasNext()) {
+                SessionID sid = it.next();
+                sb.append("[SESSION]\n");
+                sb.append("BeginString=").append(sid.getBeginString()).append('\n');
+                sb.append("SenderCompID=").append(sid.getSenderCompID()).append('\n');
+                sb.append("TargetCompID=").append(sid.getTargetCompID()).append('\n');
+                appendSessionKey(sb, sid, "ConnectionType");
+                appendSessionKey(sb, sid, "HeartBtInt");
+                appendSessionKey(sb, sid, "ResetOnLogon");
+                appendSessionKey(sb, sid, "SocketConnectHost");
+                appendSessionKey(sb, sid, "SocketConnectPort");
+                appendSessionKey(sb, sid, "SocketAcceptPort");
+                appendSessionKey(sb, sid, "DefaultApplVerID");
+                sb.append('\n');
+            }
+
+            Files.writeString(Paths.get(configFilePath), sb.toString());
+        } catch (IOException e) {
+            System.err.println("[FIX] Failed to persist session config: " + e.getMessage());
+        }
+    }
+
+    private void appendDefaultKey(StringBuilder sb, String key, String fallback) {
+        try {
+            sb.append(key).append('=').append(settings.getString(key)).append('\n');
+        } catch (Exception e) {
+            if (fallback != null) sb.append(key).append('=').append(fallback).append('\n');
+        }
+    }
+
+    private void appendSessionKey(StringBuilder sb, SessionID sid, String key) {
+        try {
+            String val = settings.getString(sid, key);
+            try { if (val.equals(settings.getString(key))) return; } catch (Exception ignored) {}
+            sb.append(key).append('=').append(val).append('\n');
+        } catch (Exception ignored) {}
+    }
+
+    // ── Session dictionary builder ────────────────────────────────────────────
+
+    private static Dictionary buildSessionDict(
+            com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req)
+            throws ConfigError {
+
+        Dictionary dict = new Dictionary();
+        dict.setString("ConnectionType",    req.connectionType().toLowerCase());
+        dict.setString("HeartBtInt",        String.valueOf(req.heartbeatSecs()));
+        dict.setString("ResetOnLogon",      req.resetOnLogon() ? "Y" : "N");
+        dict.setString("UseDataDictionary", "N");
+        dict.setString("CheckLatency",      "N");
+        dict.setString("StartTime",         "00:00:00");
+        dict.setString("EndTime",           "00:00:00");
+        dict.setString("ReconnectInterval", "5");
+        if ("initiator".equalsIgnoreCase(req.connectionType())) {
+            dict.setString("SocketConnectHost", req.host());
+            dict.setString("SocketConnectPort", String.valueOf(req.port()));
+        } else {
+            dict.setString("SocketAcceptPort", String.valueOf(req.port()));
+        }
+        if ("FIXT.1.1".equals(req.beginString())) {
+            dict.setString("DefaultApplVerID", toApplVerID(req.fixVersion()));
+        }
+        return dict;
+    }
+
+    // ── Settings helpers ──────────────────────────────────────────────────────
+
+    private static void archiveSessionFiles(String sessionId, SessionSettings settings) {
+        try {
+            String fileStorePath = settings.getString("FileStorePath");
+            Path dir = Paths.get(fileStorePath);
+            if (!Files.isDirectory(dir)) return;
+
+            String filePrefix = sessionId.replaceAll("[:/\\\\*?\"<>|]", "-");
+            long   timestamp  = System.currentTimeMillis() / 1000;
+
+            try (var stream = Files.list(dir)) {
+                stream.filter(p -> p.getFileName().toString().startsWith(filePrefix))
+                      .forEach(path -> {
+                          try {
+                              Files.move(path, path.resolveSibling(
+                                      path.getFileName() + ".deleted." + timestamp));
+                          } catch (IOException ex) { /* best-effort */ }
+                      });
+            }
+        } catch (Exception ignored) { /* FileStorePath absent — nothing to archive */ }
+    }
+
     private static void removeFromSettings(SessionSettings settings, SessionID sid) {
         try {
             Field f = SessionSettings.class.getDeclaredField("sections");
@@ -385,25 +549,12 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
         }
     }
 
-    /**
-     * Calls {@link Session#logout()} on every session immediately after the initiator
-     * starts, so sessions stay in DISCONNECTED state until the user explicitly clicks
-     * Connect on the Connection Management page.
-     */
-    private void disableAutoConnect() {
-        initiator.getSessions().forEach(sid -> {
-            Session session = Session.lookupSession(sid);
-            if (session != null) session.logout();
-        });
-    }
-
-    /** Maps a FIX application version string to its QuickFIX/J ApplVerID numeric code. */
     private static String toApplVerID(String fixVersion) {
         return switch (fixVersion) {
             case "FIX.5.0"    -> "7";
             case "FIX.5.0SP1" -> "8";
             case "FIX.5.0SP2" -> "9";
-            default            -> "9";   // default to most recent
+            default            -> "9";
         };
     }
 
