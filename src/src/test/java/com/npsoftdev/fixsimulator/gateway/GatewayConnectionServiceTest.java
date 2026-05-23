@@ -1,13 +1,19 @@
 package com.npsoftdev.fixsimulator.gateway;
 
+import com.npsoftdev.fixsimulator.service.ConnectionService;
+import com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import quickfix.SessionID;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -183,5 +189,259 @@ class GatewayConnectionServiceTest {
         doThrow(new Exception("IO error")).when(facade).reset(SID_A);
 
         assertThrows(RuntimeException.class, () -> service.resetSequence(SID_A.toString()));
+    }
+
+    // ── enabledSessions tracking ──────────────────────────────────────────────
+
+    @Nested
+    class EnabledSessionsTracking {
+
+        @Test
+        void initiallyEmpty() {
+            assertTrue(service.getEnabledSessionIds().isEmpty());
+        }
+
+        @Test
+        void connect_addsSessionToEnabledSet() {
+            sessionIDs.put(SID_A.toString(), SID_A);
+            service.connect(SID_A.toString());
+            assertTrue(service.getEnabledSessionIds().contains(SID_A.toString()));
+        }
+
+        @Test
+        void disconnect_removesSessionFromEnabledSet() {
+            sessionIDs.put(SID_A.toString(), SID_A);
+            service.connect(SID_A.toString());
+            service.disconnect(SID_A.toString());
+            assertFalse(service.getEnabledSessionIds().contains(SID_A.toString()));
+        }
+
+        @Test
+        void connect_multipleSessionsAllTracked() {
+            sessionIDs.put(SID_A.toString(), SID_A);
+            sessionIDs.put(SID_B.toString(), SID_B);
+            service.connect(SID_A.toString());
+            service.connect(SID_B.toString());
+            Set<String> enabled = service.getEnabledSessionIds();
+            assertTrue(enabled.contains(SID_A.toString()));
+            assertTrue(enabled.contains(SID_B.toString()));
+        }
+
+        @Test
+        void disconnect_removesOnlyThatSession_othersUnaffected() {
+            sessionIDs.put(SID_A.toString(), SID_A);
+            sessionIDs.put(SID_B.toString(), SID_B);
+            service.connect(SID_A.toString());
+            service.connect(SID_B.toString());
+
+            service.disconnect(SID_A.toString());
+
+            assertFalse(service.getEnabledSessionIds().contains(SID_A.toString()),
+                    "disconnected session must be removed from enabled set");
+            assertTrue(service.getEnabledSessionIds().contains(SID_B.toString()),
+                    "other session must remain in enabled set");
+        }
+
+        @Test
+        void getEnabledSessionIds_returnsUnmodifiableView() {
+            service.connect(SID_A.toString());
+            Set<String> enabled = service.getEnabledSessionIds();
+            assertThrows(UnsupportedOperationException.class, () -> enabled.add("NEW"));
+        }
+    }
+
+    // ── addSession ────────────────────────────────────────────────────────────
+
+    @Nested
+    class AddSession {
+
+        @Test
+        void delegatesToSessionAdder() {
+            List<NewSessionRequest> captured = new ArrayList<>();
+            GatewayConnectionService svc = serviceWithDelegates(captured::add, (sid, req) -> {}, sid -> {});
+
+            NewSessionRequest req = initiatorRequest();
+            svc.addSession(req);
+
+            assertEquals(1, captured.size());
+            assertSame(req, captured.get(0));
+        }
+
+        @Test
+        void testConstructor_withoutAdder_throwsUnsupported() {
+            // 3-arg constructor wires UnsupportedOperationException for delegation methods
+            assertThrows(UnsupportedOperationException.class, () -> service.addSession(initiatorRequest()));
+        }
+    }
+
+    // ── updateSession ─────────────────────────────────────────────────────────
+
+    @Nested
+    class UpdateSession {
+
+        @Test
+        void purgesOldSessionStatesBeforeDelegating() {
+            List<String> updatedIds = new ArrayList<>();
+            GatewayConnectionService svc = serviceWithDelegates(
+                    req -> {},
+                    (oldSid, req) -> updatedIds.add(oldSid),
+                    sid -> {});
+
+            sessionIDs.put(SID_A.toString(), SID_A);
+            svc.onSessionCreated(SID_A);
+
+            svc.updateSession(SID_A.toString(), initiatorRequest());
+
+            assertFalse(svc.listSessionIds().contains(SID_A.toString()),
+                    "old session state must be removed from states map");
+            assertFalse(sessionIDs.containsKey(SID_A.toString()),
+                    "old session ID must be removed from sessionIDs map");
+        }
+
+        @Test
+        void removesOldSessionFromEnabledSessionsBeforeDelegating() {
+            GatewayConnectionService svc = serviceWithDelegates(req -> {}, (sid, req) -> {}, sid -> {});
+
+            sessionIDs.put(SID_A.toString(), SID_A);
+            svc.onSessionCreated(SID_A);
+            svc.connect(SID_A.toString());    // adds SID_A to enabledSessions
+
+            svc.updateSession(SID_A.toString(), initiatorRequest());
+
+            assertFalse(svc.getEnabledSessionIds().contains(SID_A.toString()),
+                    "old session must be removed from enabledSessions so it is not auto-reconnected");
+        }
+
+        @Test
+        void doesNotRemoveOtherSessionsFromEnabledSessions() {
+            GatewayConnectionService svc = serviceWithDelegates(req -> {}, (sid, req) -> {}, sid -> {});
+
+            sessionIDs.put(SID_A.toString(), SID_A);
+            sessionIDs.put(SID_B.toString(), SID_B);
+            svc.onSessionCreated(SID_A);
+            svc.onSessionCreated(SID_B);
+            svc.connect(SID_A.toString());    // A enabled
+            svc.connect(SID_B.toString());    // B enabled
+
+            svc.updateSession(SID_A.toString(), initiatorRequest());   // edit A
+
+            assertTrue(svc.getEnabledSessionIds().contains(SID_B.toString()),
+                    "session B must remain in enabledSessions — editing A must not affect B");
+        }
+
+        @Test
+        void delegatesToSessionUpdater() {
+            List<String> capturedOldId = new ArrayList<>();
+            List<NewSessionRequest> capturedReq = new ArrayList<>();
+            GatewayConnectionService svc = serviceWithDelegates(
+                    req -> {},
+                    (oldSid, req) -> { capturedOldId.add(oldSid); capturedReq.add(req); },
+                    sid -> {});
+
+            NewSessionRequest req = initiatorRequest();
+            svc.updateSession(SID_A.toString(), req);
+
+            assertEquals(1, capturedOldId.size());
+            assertEquals(SID_A.toString(), capturedOldId.get(0));
+            assertSame(req, capturedReq.get(0));
+        }
+    }
+
+    // ── deleteSession ─────────────────────────────────────────────────────────
+
+    @Nested
+    class DeleteSession {
+
+        @Test
+        void whenConnected_disconnectsBeforeDelegatingToDeleter() {
+            List<String> deletedIds = new ArrayList<>();
+            GatewayConnectionService svc = serviceWithDelegates(req -> {}, (sid, req) -> {}, deletedIds::add);
+
+            sessionIDs.put(SID_A.toString(), SID_A);
+            svc.onSessionCreated(SID_A);
+            svc.onLogon(SID_A);   // make CONNECTED
+
+            svc.deleteSession(SID_A.toString());
+
+            verify(facade).logout(SID_A);          // disconnect happened
+            assertEquals(List.of(SID_A.toString()), deletedIds);  // deleter was called
+        }
+
+        @Test
+        void whenNotConnected_doesNotCallLogout() {
+            GatewayConnectionService svc = serviceWithDelegates(req -> {}, (sid, req) -> {}, sid -> {});
+
+            sessionIDs.put(SID_A.toString(), SID_A);
+            svc.onSessionCreated(SID_A);   // CREATED — not CONNECTED
+
+            svc.deleteSession(SID_A.toString());
+
+            verify(facade, never()).logout(any());
+        }
+
+        @Test
+        void purgesStateAndRemovesFromEnabledSessions() {
+            GatewayConnectionService svc = serviceWithDelegates(req -> {}, (sid, req) -> {}, sid -> {});
+
+            sessionIDs.put(SID_A.toString(), SID_A);
+            svc.onSessionCreated(SID_A);
+            svc.connect(SID_A.toString());   // adds to enabledSessions
+
+            svc.deleteSession(SID_A.toString());
+
+            assertFalse(svc.listSessionIds().contains(SID_A.toString()),
+                    "deleted session must be removed from states map");
+            assertFalse(sessionIDs.containsKey(SID_A.toString()),
+                    "deleted session must be removed from sessionIDs map");
+            assertFalse(svc.getEnabledSessionIds().contains(SID_A.toString()),
+                    "deleted session must be removed from enabledSessions");
+        }
+
+        @Test
+        void doesNotPurgeOtherSessions() {
+            GatewayConnectionService svc = serviceWithDelegates(req -> {}, (sid, req) -> {}, sid -> {});
+
+            sessionIDs.put(SID_A.toString(), SID_A);
+            sessionIDs.put(SID_B.toString(), SID_B);
+            svc.onSessionCreated(SID_A);
+            svc.onSessionCreated(SID_B);
+            svc.connect(SID_B.toString());   // B enabled
+
+            svc.deleteSession(SID_A.toString());   // delete A
+
+            assertTrue(svc.listSessionIds().contains(SID_B.toString()),
+                    "session B state must not be removed when A is deleted");
+            assertTrue(svc.getEnabledSessionIds().contains(SID_B.toString()),
+                    "session B must remain enabled when A is deleted");
+        }
+
+        @Test
+        void delegatesToSessionDeleter() {
+            List<String> deletedIds = new ArrayList<>();
+            GatewayConnectionService svc = serviceWithDelegates(req -> {}, (sid, req) -> {}, deletedIds::add);
+
+            svc.deleteSession(SID_A.toString());
+
+            assertEquals(List.of(SID_A.toString()), deletedIds);
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Builds a service wired with the given lambdas.  The lambdas are plain
+     * implementations (not Mockito mocks) to avoid generic type-erasure issues.
+     */
+    private GatewayConnectionService serviceWithDelegates(
+            java.util.function.Consumer<NewSessionRequest>          adder,
+            java.util.function.BiConsumer<String, NewSessionRequest> updater,
+            java.util.function.Consumer<String>                      deleter) {
+        return new GatewayConnectionService(sessionIDs, facade, null, adder, updater, deleter);
+    }
+
+    private static NewSessionRequest initiatorRequest() {
+        return new NewSessionRequest(
+                "Initiator", "FIX.4.4", "FIX.4.4",
+                "SENDER", "TARGET", "localhost", 9876, 30, true);
     }
 }

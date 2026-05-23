@@ -386,9 +386,9 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
     /**
      * Builds a standalone {@link SessionSettings} from a {@link com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest}.
-     * Used when adding or updating a session.
+     * Used when adding or updating a session.  Package-private for testing.
      */
-    private static SessionSettings buildPerSessionSettings(
+    static SessionSettings buildPerSessionSettings(
             com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req)
             throws ConfigError {
 
@@ -428,8 +428,9 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     /**
      * Writes all sessions from the master {@link SessionSettings} to
      * {@code fix-gateway.cfg} so that configuration survives restarts.
+     * Package-private for testing.
      */
-    private void persistSettings() {
+    void persistSettings() {
         if (configFilePath == null || settings == null) return;
         try {
             StringBuilder sb = new StringBuilder();
