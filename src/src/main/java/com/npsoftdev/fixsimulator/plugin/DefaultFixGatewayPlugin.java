@@ -59,7 +59,8 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     private final Class<? extends BasePage> pageClass;
 
     // ── FIX (null when nav-only) ──────────────────────────────────────────────
-    private final SessionSettings settings;
+    /** Transient: {@link quickfix.SessionSettings} is not serializable. Re-obtained from the live initiator at runtime. */
+    private transient SessionSettings settings;
 
     /**
      * Shared session-ID registry populated from {@link #onCreate}/{@link #onLogon}

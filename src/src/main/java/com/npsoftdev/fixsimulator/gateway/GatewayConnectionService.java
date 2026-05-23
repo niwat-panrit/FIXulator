@@ -63,8 +63,8 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     private final Map<String, SessionState> states = new ConcurrentHashMap<>();
     private final SessionFacade             session;
 
-    /** May be {@code null} when constructed without settings (e.g. in tests). */
-    private final SessionSettings settings;
+    /** May be {@code null} when constructed without settings (e.g. in tests). Transient: {@link SessionSettings} is not serializable. */
+    private transient SessionSettings settings;
 
     /** Delegates dynamic session creation to {@link com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin}. */
     private final Consumer<NewSessionRequest> sessionAdder;

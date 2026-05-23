@@ -18,6 +18,7 @@ import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.ListView;
 import org.apache.wicket.request.resource.PackageResourceReference;
 
+import java.io.Serializable;
 import java.util.List;
 
 public abstract class BasePage extends WebPage {
@@ -70,24 +71,40 @@ public abstract class BasePage extends WebPage {
 
     // -------------------------------------------------------------------------
 
-    private ListView<SimulatorPlugin> buildNavList(String id, List<SimulatorPlugin> plugins) {
-        return new ListView<>(id, plugins) {
+    /**
+     * Lightweight, fully-serializable snapshot of a plugin's nav properties.
+     * Keeping this separate from {@link SimulatorPlugin} ensures the ListView
+     * model never holds a reference to live plugin objects (which in turn hold
+     * QuickFIX/J state that is not serializable).
+     */
+    private record NavEntry(
+            String label,
+            String iconClass,
+            Class<? extends BasePage> pageClass
+    ) implements Serializable {}
+
+    private ListView<NavEntry> buildNavList(String id, List<SimulatorPlugin> plugins) {
+        List<NavEntry> entries = plugins.stream()
+                .map(p -> new NavEntry(p.getLabel(), p.getIconClass(), p.getPageClass()))
+                .toList();
+
+        return new ListView<>(id, entries) {
             @Override
-            protected void populateItem(ListItem<SimulatorPlugin> item) {
-                SimulatorPlugin plugin = item.getModelObject();
+            protected void populateItem(ListItem<NavEntry> item) {
+                NavEntry entry = item.getModelObject();
 
                 BookmarkablePageLink<Void> link =
-                        new BookmarkablePageLink<>("navLink", plugin.getPageClass());
+                        new BookmarkablePageLink<>("navLink", entry.pageClass());
                 link.add(AttributeModifier.replace("class",
-                        BasePage.this.getClass().equals(plugin.getPageClass())
+                        BasePage.this.getClass().equals(entry.pageClass())
                                 ? "nav-link active"
                                 : "nav-link"));
 
                 WebMarkupContainer icon = new WebMarkupContainer("navIcon");
-                icon.add(AttributeModifier.replace("class", "bi " + plugin.getIconClass()));
+                icon.add(AttributeModifier.replace("class", "bi " + entry.iconClass()));
                 link.add(icon);
 
-                link.add(new Label("navLabel", plugin.getLabel()));
+                link.add(new Label("navLabel", entry.label()));
                 item.add(link);
             }
         };

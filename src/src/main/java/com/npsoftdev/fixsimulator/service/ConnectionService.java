@@ -1,5 +1,6 @@
 package com.npsoftdev.fixsimulator.service;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -23,7 +24,7 @@ public interface ConnectionService {
             String status,
             int    txSeq,
             int    rxSeq
-    ) {}
+    ) implements Serializable {}
 
     /**
      * Returns a {@link SessionDetails} snapshot for every registered session,

@@ -10,6 +10,16 @@
         </a>
     </div>
 
+    <!-- Auto-refresh indicator -->
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <small class="text-muted"><i class="bi bi-arrow-clockwise me-1"></i>Next refresh</small>
+        <small class="fw-semibold text-primary" id="refreshCountdown">3s</small>
+        <div class="progress flex-grow-1" style="height:4px;">
+            <div class="progress-bar bg-primary" id="refreshProgress" role="progressbar"
+                 style="width:100%;transition:none;"></div>
+        </div>
+    </div>
+
     <div class="table-card">
         <div class="table-responsive">
             <table class="table table-sm table-hover mb-0">

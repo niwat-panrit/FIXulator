@@ -6,6 +6,8 @@ import com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest;
 import com.npsoftdev.fixsimulator.service.ConnectionService.SessionDetails;
 import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
+import org.apache.wicket.markup.head.IHeaderResponse;
+import org.apache.wicket.markup.head.OnDomReadyHeaderItem;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.AjaxSelfUpdatingTimerBehavior;
 import org.apache.wicket.ajax.attributes.AjaxCallListener;
@@ -270,6 +272,39 @@ public class ConnectionManagementPage extends BasePage {
         });
 
         return form;
+    }
+
+    // ── Head contributions ────────────────────────────────────────────────────
+
+    @Override
+    public void renderHead(IHeaderResponse response) {
+        super.renderHead(response);
+        // Countdown progress bar: drains from 100 % → 0 % over the auto-refresh interval
+        // and restarts on every Wicket AJAX completion (including the timer tick itself).
+        response.render(OnDomReadyHeaderItem.forScript("""
+            (function () {
+                var INTERVAL_MS = 3000;
+                var bar   = document.getElementById('refreshProgress');
+                var label = document.getElementById('refreshCountdown');
+                if (!bar || !label) return;
+                var raf = null, t0 = Date.now();
+                function tick() {
+                    var elapsed   = Date.now() - t0;
+                    var pct       = Math.max(0, 100 - (elapsed / INTERVAL_MS * 100));
+                    var remaining = Math.ceil(Math.max(0, INTERVAL_MS - elapsed) / 1000);
+                    bar.style.width     = pct + '%';
+                    label.textContent   = remaining + 's';
+                    if (elapsed < INTERVAL_MS) raf = requestAnimationFrame(tick);
+                }
+                function start() {
+                    if (raf) cancelAnimationFrame(raf);
+                    t0  = Date.now();
+                    raf = requestAnimationFrame(tick);
+                }
+                start();
+                Wicket.Event.subscribe('/ajax/call/complete', start);
+            })();
+        """));
     }
 
     // ── Service lookup ────────────────────────────────────────────────────────
