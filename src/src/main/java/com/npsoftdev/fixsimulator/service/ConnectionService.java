@@ -73,4 +73,10 @@ public interface ConnectionService {
 
     /** Removes the existing session identified by {@code sessionId} and replaces it with a new one. */
     void updateSession(String sessionId, NewSessionRequest request);
+
+    /**
+     * Disconnects (if currently connected) and permanently removes the session.
+     * Any on-disk QuickFIX/J session files are archived with a {@code .deleted.{unix_timestamp}} suffix.
+     */
+    void deleteSession(String sessionId);
 }

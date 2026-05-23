@@ -4,9 +4,12 @@ import com.npsoftdev.fixsimulator.FixSimulatorApplication;
 import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest;
 import com.npsoftdev.fixsimulator.service.ConnectionService.SessionDetails;
+import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.AjaxSelfUpdatingTimerBehavior;
+import org.apache.wicket.ajax.attributes.AjaxCallListener;
+import org.apache.wicket.ajax.attributes.AjaxRequestAttributes;
 import org.apache.wicket.ajax.form.AjaxFormComponentUpdatingBehavior;
 import org.apache.wicket.ajax.markup.html.AjaxLink;
 import org.apache.wicket.ajax.markup.html.form.AjaxButton;
@@ -30,23 +33,28 @@ import java.util.List;
 
 /**
  * Displays all configured FIX sessions with their live status and sequence numbers,
- * and provides connect / disconnect / reset-sequence / edit actions.
+ * and provides connect / disconnect / reset-sequence / edit / delete actions.
+ *
+ * <p>No reference to {@link ConnectionService} is ever captured inside a closure.
+ * Every handler looks the service up fresh via {@link #connSvc()} so that Wicket's
+ * page store never tries to serialise the service (or the QuickFIX/J objects it
+ * transitively holds).</p>
  */
 public class ConnectionManagementPage extends BasePage {
 
     public ConnectionManagementPage() {
         super();
 
-        ConnectionService connectionService =
-                ((FixSimulatorApplication) getApplication()).getConnectionService();
-
-        // Model that re-queries the service on each render
+        // Model that re-queries the service on each render — uses Application.get()
+        // so no service reference is captured in the closure.
         LoadableDetachableModel<List<SessionDetails>> sessionsModel =
                 new LoadableDetachableModel<>() {
                     @Override
                     protected List<SessionDetails> load() {
-                        if (connectionService == null) return Collections.emptyList();
-                        return connectionService.listSessions();
+                        ConnectionService cs =
+                                ((FixSimulatorApplication) Application.get()).getConnectionService();
+                        if (cs == null) return Collections.emptyList();
+                        return cs.listSessions();
                     }
                 };
 
@@ -80,12 +88,11 @@ public class ConnectionManagementPage extends BasePage {
             public void onClick(AjaxRequestTarget target) {
                 model.resetToDefaults();
                 target.add(modalTitle);
-                // form is re-rendered via the modal open; fields pull from the model
             }
         });
 
         // Add / edit session form (modal)
-        Form<NewSessionModel> form = buildSessionForm(model, connectionService, tableBody, modalTitle);
+        Form<NewSessionModel> form = buildSessionForm(model, tableBody, modalTitle);
         add(form);
 
         // Session rows
@@ -117,41 +124,39 @@ public class ConnectionManagementPage extends BasePage {
                 item.add(statusBadge);
 
                 // Connect link — visible only when not connected
-                Link<Void> connectLink = new Link<>("connectLink") {
+                item.add(new Link<Void>("connectLink") {
                     @Override
                     public void onClick() {
-                        if (connectionService != null)
-                            connectionService.connect(s.sessionId());
+                        ConnectionService cs = connSvc();
+                        if (cs != null) cs.connect(s.sessionId());
                     }
                     @Override
                     protected void onConfigure() {
                         super.onConfigure();
                         setVisible(!"CONNECTED".equals(s.status()));
                     }
-                };
-                item.add(connectLink);
+                });
 
                 // Disconnect link — visible only when connected
-                Link<Void> disconnectLink = new Link<>("disconnectLink") {
+                item.add(new Link<Void>("disconnectLink") {
                     @Override
                     public void onClick() {
-                        if (connectionService != null)
-                            connectionService.disconnect(s.sessionId());
+                        ConnectionService cs = connSvc();
+                        if (cs != null) cs.disconnect(s.sessionId());
                     }
                     @Override
                     protected void onConfigure() {
                         super.onConfigure();
                         setVisible("CONNECTED".equals(s.status()));
                     }
-                };
-                item.add(disconnectLink);
+                });
 
                 // Reset sequence link
                 item.add(new Link<Void>("resetSeqLink") {
                     @Override
                     public void onClick() {
-                        if (connectionService != null)
-                            connectionService.resetSequence(s.sessionId());
+                        ConnectionService cs = connSvc();
+                        if (cs != null) cs.resetSequence(s.sessionId());
                     }
                 });
 
@@ -165,6 +170,28 @@ public class ConnectionManagementPage extends BasePage {
                                 "new bootstrap.Modal(document.getElementById('connModal')).show();");
                     }
                 });
+
+                // Delete link — confirms, disconnects if needed, then permanently removes
+                item.add(new AjaxLink<Void>("deleteLink") {
+                    @Override
+                    public void onClick(AjaxRequestTarget target) {
+                        ConnectionService cs = connSvc();
+                        if (cs != null) cs.deleteSession(s.sessionId());
+                        target.add(tableBody);
+                    }
+
+                    @Override
+                    protected void updateAjaxAttributes(AjaxRequestAttributes attributes) {
+                        super.updateAjaxAttributes(attributes);
+                        String safeName = s.name()
+                                .replace("\\", "\\\\")
+                                .replace("'", "\\'");
+                        attributes.getAjaxCallListeners().add(new AjaxCallListener()
+                                .onPrecondition("return confirm('Delete connection \\'" + safeName
+                                        + "\\'?\\nIf currently connected it will be disconnected first."
+                                        + "\\nThis cannot be undone.');"));
+                    }
+                });
             }
         });
     }
@@ -172,7 +199,6 @@ public class ConnectionManagementPage extends BasePage {
     // ── Add / edit session form ───────────────────────────────────────────────
 
     private Form<NewSessionModel> buildSessionForm(NewSessionModel model,
-                                                   ConnectionService connectionService,
                                                    WebMarkupContainer tableBody,
                                                    Label modalTitle) {
         Form<NewSessionModel> form = new Form<>("addSessionForm",
@@ -211,7 +237,8 @@ public class ConnectionManagementPage extends BasePage {
         form.add(new AjaxButton("saveBtn", form) {
             @Override
             protected void onSubmit(AjaxRequestTarget target) {
-                if (connectionService != null) {
+                ConnectionService cs = connSvc();
+                if (cs != null) {
                     NewSessionRequest req = new NewSessionRequest(
                             model.connectionType,
                             model.fixVersion,
@@ -224,9 +251,9 @@ public class ConnectionManagementPage extends BasePage {
                             model.resetOnLogon
                     );
                     if (model.editingSessionId != null) {
-                        connectionService.updateSession(model.editingSessionId, req);
+                        cs.updateSession(model.editingSessionId, req);
                     } else {
-                        connectionService.addSession(req);
+                        cs.addSession(req);
                     }
                     model.resetToDefaults();
                     target.add(modalTitle);
@@ -243,6 +270,17 @@ public class ConnectionManagementPage extends BasePage {
         });
 
         return form;
+    }
+
+    // ── Service lookup ────────────────────────────────────────────────────────
+
+    /**
+     * Looks up the {@link ConnectionService} fresh from the application on every
+     * call so that no service reference is ever stored in the page's component
+     * tree (which Wicket serialises to its page store).
+     */
+    private ConnectionService connSvc() {
+        return ((FixSimulatorApplication) getApplication()).getConnectionService();
     }
 
     // ── Form model ────────────────────────────────────────────────────────────

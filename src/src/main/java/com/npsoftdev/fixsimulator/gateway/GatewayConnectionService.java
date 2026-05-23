@@ -72,27 +72,33 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     /** Delegates session update (remove old + add new) to {@link com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin}. */
     private final BiConsumer<String, NewSessionRequest> sessionUpdater;
 
+    /** Delegates session deletion to {@link com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin}. */
+    private final Consumer<String> sessionDeleter;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    /** Test-friendly constructor — {@code addSession} and {@code updateSession} are not supported. */
+    /** Test-friendly constructor — {@code addSession}, {@code updateSession}, and {@code deleteSession} are not supported. */
     public GatewayConnectionService(Map<String, SessionID> sessionIDs,
                                     SessionFacade session,
                                     SessionSettings settings) {
         this(sessionIDs, session, settings,
                 req -> { throw new UnsupportedOperationException("addSession not wired"); },
-                (sid, req) -> { throw new UnsupportedOperationException("updateSession not wired"); });
+                (sid, req) -> { throw new UnsupportedOperationException("updateSession not wired"); },
+                sid -> { throw new UnsupportedOperationException("deleteSession not wired"); });
     }
 
     public GatewayConnectionService(Map<String, SessionID> sessionIDs,
                                     SessionFacade session,
                                     SessionSettings settings,
                                     Consumer<NewSessionRequest> sessionAdder,
-                                    BiConsumer<String, NewSessionRequest> sessionUpdater) {
+                                    BiConsumer<String, NewSessionRequest> sessionUpdater,
+                                    Consumer<String> sessionDeleter) {
         this.sessionIDs     = sessionIDs;
         this.session        = session;
         this.settings       = settings;
         this.sessionAdder   = sessionAdder;
         this.sessionUpdater = sessionUpdater;
+        this.sessionDeleter = sessionDeleter;
     }
 
     // ── Callbacks from DefaultFixGatewayPlugin ────────────────────────────────
@@ -198,6 +204,19 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         states.remove(sessionId);
         sessionIDs.remove(sessionId);
         sessionUpdater.accept(sessionId, request);
+    }
+
+    @Override
+    public void deleteSession(String sessionId) {
+        // Disconnect first so a clean FIX Logout is sent before the session is torn down.
+        if ("CONNECTED".equals(getStatus(sessionId))) {
+            disconnect(sessionId);
+        }
+        // Purge local state before the plugin restarts the initiator.
+        states.remove(sessionId);
+        sessionIDs.remove(sessionId);
+        // Delegate archive + QFJ settings removal + initiator restart to the plugin.
+        sessionDeleter.accept(sessionId);
     }
 
     @Override

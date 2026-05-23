@@ -11,13 +11,20 @@ import quickfix.*;
 import quickfix.Dictionary;
 import quickfix.field.MsgType;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * The default FIX gateway plugin.
@@ -94,8 +101,12 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
         if (settings != null) {
             LiveSessionFacade facade = new LiveSessionFacade();
+            // Cast method references to Serializable so Wicket can serialise the page store.
             connectionService = new GatewayConnectionService(
-                    sessionIDs, facade, settings, this::addSessionInternal, this::updateSessionInternal);
+                    sessionIDs, facade, settings,
+                    (Serializable & Consumer<com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest>) this::addSessionInternal,
+                    (Serializable & BiConsumer<String, com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest>) this::updateSessionInternal,
+                    (Serializable & Consumer<String>) this::deleteSessionInternal);
             messageLogService = new GatewayMessageLogService();
         }
     }
@@ -248,6 +259,87 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             disableAutoConnect();
         } catch (Exception e) {
             throw new RuntimeException("Failed to add FIX session: " + sid, e);
+        }
+    }
+
+    /**
+     * Disconnects the given session (defensive), archives any on-disk QuickFIX/J
+     * session files, removes the session from {@link SessionSettings}, and restarts
+     * the initiator so the change takes effect immediately.
+     */
+    private synchronized void deleteSessionInternal(String sessionId) {
+
+        if (initiator == null) throw new IllegalStateException("Initiator not started");
+
+        // Locate the SessionID in the live settings (before removal).
+        SessionID targetSid = null;
+        Iterator<SessionID> it = settings.sectionIterator();
+        while (it.hasNext()) {
+            SessionID sid = it.next();
+            if (sid.toString().equals(sessionId)) {
+                targetSid = sid;
+                break;
+            }
+        }
+
+        // Defensively log out — GatewayConnectionService already sent a logout, but
+        // the session may have started reconnecting in the brief interval since then.
+        if (targetSid != null) {
+            Session qfSession = Session.lookupSession(targetSid);
+            if (qfSession != null) qfSession.logout();
+        }
+
+        // Archive any on-disk QuickFIX/J session files (no-op with MemoryStoreFactory).
+        archiveSessionFiles(sessionId, settings);
+
+        // Remove from settings then restart the initiator.
+        if (targetSid != null) removeFromSettings(settings, targetSid);
+
+        try {
+            initiator.stop(true);
+            initiator = new SocketInitiator(this, new MemoryStoreFactory(), settings,
+                    new SLF4JLogFactory(settings), new DefaultMessageFactory());
+            initiator.start();
+            disableAutoConnect();
+        } catch (ConfigError e) {
+            throw new RuntimeException(
+                    "Failed to restart initiator after deleting session: " + sessionId, e);
+        }
+    }
+
+    /**
+     * Renames every QuickFIX/J FileStore file whose name starts with the session's
+     * file prefix by appending {@code .deleted.{unix_timestamp}}.  This preserves
+     * the last sequence-number state while clearly marking the session as deleted.
+     *
+     * <p>This is a best-effort operation: if {@code FileStorePath} is not configured
+     * (e.g. when using {@code MemoryStoreFactory}) or the files do not exist, the
+     * method returns silently.</p>
+     */
+    private static void archiveSessionFiles(String sessionId, SessionSettings settings) {
+        try {
+            String fileStorePath = settings.getString("FileStorePath");
+            Path dir = Paths.get(fileStorePath);
+            if (!Files.isDirectory(dir)) return;
+
+            // QuickFIX/J derives the file prefix from SessionID.toString() by replacing
+            // reserved filesystem characters with '-'.
+            String filePrefix = sessionId.replaceAll("[:/\\\\*?\"<>|]", "-");
+            long   timestamp  = System.currentTimeMillis() / 1000;
+
+            try (var stream = Files.list(dir)) {
+                stream.filter(p -> p.getFileName().toString().startsWith(filePrefix))
+                      .forEach(path -> {
+                          try {
+                              Files.move(path, path.resolveSibling(
+                                      path.getFileName() + ".deleted." + timestamp));
+                          } catch (IOException ex) {
+                              // Best-effort — log and continue.
+                          }
+                      });
+            }
+        } catch (Exception ignored) {
+            // FileStorePath absent or inaccessible — nothing to archive.
         }
     }
 
