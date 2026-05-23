@@ -365,23 +365,47 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     /**
      * Builds a standalone {@link SessionSettings} for one session by extracting
      * its configuration from the master settings.  Used during {@link #initialize}.
+     *
+     * <p>Reconstructs a {@link com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest}
+     * from the master settings and delegates to the proven
+     * {@link #buildPerSessionSettings(com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest)}
+     * overload, guaranteeing the same code path as add/update.</p>
      */
     private SessionSettings buildPerSessionSettings(SessionID sid) throws ConfigError {
-        StringBuilder cfg = new StringBuilder();
-        appendDefaultSection(cfg);
-        cfg.append("\n[SESSION]\n");
-        cfg.append("BeginString=").append(sid.getBeginString()).append("\n");
-        cfg.append("SenderCompID=").append(sid.getSenderCompID()).append("\n");
-        cfg.append("TargetCompID=").append(sid.getTargetCompID()).append("\n");
-        for (String key : List.of("ConnectionType", "HeartBtInt", "ResetOnLogon",
-                                  "SocketConnectHost", "SocketConnectPort",
-                                  "SocketAcceptPort", "DefaultApplVerID")) {
-            try {
-                cfg.append(key).append("=").append(settings.getString(sid, key)).append("\n");
-            } catch (Exception ignored) {}
+        String connectionType = safeGetStr(sid, "ConnectionType", "initiator");
+        String beginString    = sid.getBeginString();
+        String fixVersion     = beginString; // default for FIX 4.x
+        if ("FIXT.1.1".equals(beginString)) {
+            fixVersion = fromApplVerID(safeGetStr(sid, "DefaultApplVerID", "9"));
         }
-        return new SessionSettings(
-                new java.io.ByteArrayInputStream(cfg.toString().getBytes(StandardCharsets.UTF_8)));
+        boolean isInitiator = "initiator".equalsIgnoreCase(connectionType);
+        String host = isInitiator ? safeGetStr(sid, "SocketConnectHost", "localhost") : "0.0.0.0";
+        int port = isInitiator
+                ? Integer.parseInt(safeGetStr(sid, "SocketConnectPort", "9876"))
+                : Integer.parseInt(safeGetStr(sid, "SocketAcceptPort",  "9876"));
+        int     heartbeatSecs = Integer.parseInt(safeGetStr(sid, "HeartBtInt", "30"));
+        boolean resetOnLogon  = "Y".equalsIgnoreCase(safeGetStr(sid, "ResetOnLogon", "Y"));
+
+        com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req =
+                new com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest(
+                        connectionType, fixVersion, beginString,
+                        sid.getSenderCompID(), sid.getTargetCompID(),
+                        host, port, heartbeatSecs, resetOnLogon);
+
+        return buildPerSessionSettings(req);
+    }
+
+    private String safeGetStr(SessionID sid, String key, String fallback) {
+        try { return settings.getString(sid, key); } catch (Exception e) { return fallback; }
+    }
+
+    private static String fromApplVerID(String applVerID) {
+        return switch (applVerID) {
+            case "7" -> "FIX.5.0";
+            case "8" -> "FIX.5.0SP1";
+            case "9" -> "FIX.5.0SP2";
+            default  -> "FIX.5.0SP2";
+        };
     }
 
     /**
