@@ -10,32 +10,49 @@
 <!-- ════════════════════════════════════════════════════
      TOP NAVBAR
      ════════════════════════════════════════════════════ -->
-<nav class="navbar-top">
+<nav wicket:id="topbarNav" class="navbar-top">
 
     <!-- Brand -->
     <a class="navbar-brand-text" href="/">
         <i class="bi bi-activity text-primary me-1"></i>FIX Simulator
     </a>
 
-    <!-- Connection Info Box -->
-    <div class="conn-info-box">
+    <!-- Status area — polled every 2 s; display:contents so it is invisible
+         to the flex layout of navbar-top but can be AJAX-replaced as a unit -->
+    <div wicket:id="connStatusArea" style="display:contents;">
+
+    <!-- No-session placeholder — shown when no connection is selected -->
+    <div wicket:id="noSessionBox" class="conn-info-box text-secondary" style="font-size:0.8rem; font-style:italic;">
+        <i class="bi bi-hdd-network me-2"></i>No session selected &mdash; use <strong>Switch Connection</strong> to pick one
+    </div>
+
+    <!-- Active-session info box — shown when a connection is selected -->
+    <div wicket:id="connInfoBox" class="conn-info-box">
         <i class="bi bi-hdd-network text-secondary"></i>
-        <span class="conn-name" wicket:id="connName">OrderRouter-01</span>
+        <span class="conn-name" wicket:id="connName">-</span>
         <span class="sep">|</span>
-        <span wicket:id="connStatus" class="badge bg-success">CONNECTED</span>
+        <span wicket:id="connStatus" class="badge">-</span>
         <span class="sep">|</span>
-        <span class="text-secondary" style="font-size:0.78rem;">TX Seq:</span>
-        <span class="conn-seq" wicket:id="txSeq">42</span>
-        <span class="text-secondary" style="font-size:0.78rem;">RX Seq:</span>
-        <span class="conn-seq" wicket:id="rxSeq">38</span>
+        <span class="text-secondary" style="font-size:0.78rem;">TX:</span>
+        <span class="conn-seq" wicket:id="txSeq">-</span>
+        <span class="text-secondary" style="font-size:0.78rem;">RX:</span>
+        <span class="conn-seq" wicket:id="rxSeq">-</span>
         <span class="sep">|</span>
-        <a wicket:id="connectBtn" class="btn btn-sm btn-danger py-0 px-2" style="font-size:0.8rem;">
+        <!-- Connect (shown when NOT connected) -->
+        <a wicket:id="connectBtn" class="btn btn-sm btn-success py-0 px-2" style="font-size:0.8rem;">
+            <i class="bi bi-plug-fill me-1"></i>Connect
+        </a>
+        <!-- Disconnect (shown when CONNECTED) -->
+        <a wicket:id="disconnectBtn" class="btn btn-sm btn-danger py-0 px-2" style="font-size:0.8rem;">
             <i class="bi bi-x-circle me-1"></i>Disconnect
         </a>
+        <!-- Seq Mgmt (shown when NOT connected — avoids confusion during live trading) -->
         <a wicket:id="manageSeqBtn" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.8rem;">
             <i class="bi bi-sliders me-1"></i>Seq Mgmt
         </a>
     </div>
+
+    </div><!-- /connStatusArea -->
 
     <!-- Switch Connection -->
     <div class="dropdown">
@@ -45,17 +62,16 @@
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
             <li><h6 class="dropdown-header">Available Sessions</h6></li>
-            <li><a class="dropdown-item active" href="#">
-                <i class="bi bi-circle-fill text-success me-2" style="font-size:0.5rem;"></i>OrderRouter-01
-            </a></li>
-            <li><a class="dropdown-item" href="#">
-                <i class="bi bi-circle-fill text-danger me-2" style="font-size:0.5rem;"></i>MarketData-Feed
-            </a></li>
-            <li><a class="dropdown-item" href="#">
-                <i class="bi bi-circle-fill text-warning me-2" style="font-size:0.5rem;"></i>DropCopy-01
-            </a></li>
+            <li wicket:id="switchConnectionList">
+                <a wicket:id="switchLink" class="dropdown-item" href="#">
+                    <i wicket:id="statusDot" class="bi bi-circle-fill me-2 status-dot"></i>
+                    <span wicket:id="sessionName">-</span>
+                </a>
+            </li>
             <li><hr class="dropdown-divider"/></li>
-            <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Manage Connections</a></li>
+            <li><a class="dropdown-item" href="/connections">
+                <i class="bi bi-gear me-2"></i>Manage Connections
+            </a></li>
         </ul>
     </div>
 
@@ -119,6 +135,49 @@
         <wicket:child/>
     </main>
 
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     SEQ MANAGEMENT MODAL
+     (only available when the active session is disconnected)
+     ════════════════════════════════════════════════════ -->
+<div class="modal fade" id="seqModal" tabindex="-1" aria-labelledby="seqModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="seqModalLabel">
+                    <i class="bi bi-sliders me-2 text-secondary"></i>Sequence Management
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form wicket:id="seqForm">
+                <div class="modal-body">
+                    <p class="text-muted" style="font-size:0.82rem;">
+                        Set the next expected sequence numbers for the active session.
+                        Available only when disconnected to avoid sequence mismatches.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                            <i class="bi bi-arrow-up-circle me-1 text-primary"></i>Next TX Seq (outbound)
+                        </label>
+                        <input type="number" wicket:id="txSeq" class="form-control form-control-sm" min="1"/>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                            <i class="bi bi-arrow-down-circle me-1 text-success"></i>Next RX Seq (inbound)
+                        </label>
+                        <input type="number" wicket:id="rxSeq" class="form-control form-control-sm" min="1"/>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button wicket:id="applySeqBtn" type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>Apply
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 </body>

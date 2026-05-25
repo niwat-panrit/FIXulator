@@ -10,9 +10,12 @@ import com.npsoftdev.fixsimulator.service.MessageLogService;
 import com.npsoftdev.fixsimulator.service.OrderService;
 import com.npsoftdev.fixsimulator.service.TradeService;
 import org.apache.wicket.Page;
+import org.apache.wicket.Session;
 import org.apache.wicket.csp.CSPDirective;
 import org.apache.wicket.csp.CSPDirectiveSrcValue;
 import org.apache.wicket.protocol.http.WebApplication;
+import org.apache.wicket.request.Request;
+import org.apache.wicket.request.Response;
 import quickfix.ConfigError;
 import quickfix.SessionSettings;
 
@@ -35,6 +38,11 @@ public class FixSimulatorApplication extends WebApplication {
     private TradeService      tradeService;
 
     // ── WebApplication ────────────────────────────────────────────────────────
+
+    @Override
+    public Session newSession(Request request, Response response) {
+        return new FixSimulatorSession(request);
+    }
 
     @Override
     public Class<? extends Page> getHomePage() {

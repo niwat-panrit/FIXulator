@@ -58,6 +58,18 @@ public class LiveSessionFacade implements SessionFacade, Serializable {
     }
 
     @Override
+    public void setNextSenderNum(SessionID sessionID, int nextNum) throws Exception {
+        Session session = Session.lookupSession(sessionID);
+        if (session != null) session.setNextSenderMsgSeqNum(nextNum);
+    }
+
+    @Override
+    public void setNextTargetNum(SessionID sessionID, int nextNum) throws Exception {
+        Session session = Session.lookupSession(sessionID);
+        if (session != null) session.setNextTargetMsgSeqNum(nextNum);
+    }
+
+    @Override
     public void sendToTarget(Message message, SessionID sessionID) throws SessionNotFound {
         Session.sendToTarget(message, sessionID);
     }

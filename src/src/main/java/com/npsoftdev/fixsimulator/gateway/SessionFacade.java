@@ -25,5 +25,11 @@ public interface SessionFacade {
     /** Resets sequence numbers to 1. */
     void reset(SessionID sessionID) throws Exception;
 
+    /** Sets the next outbound (TX) sequence number. */
+    void setNextSenderNum(SessionID sessionID, int nextNum) throws Exception;
+
+    /** Sets the next inbound (RX) sequence number. */
+    void setNextTargetNum(SessionID sessionID, int nextNum) throws Exception;
+
     void sendToTarget(Message message, SessionID sessionID) throws SessionNotFound;
 }

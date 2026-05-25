@@ -148,6 +148,9 @@ body {
 .dir-out { color: #2563eb; font-weight: 600; font-size: 0.8rem; }
 .dir-in  { color: #16a34a; font-weight: 600; font-size: 0.8rem; }
 
+/* ── Switch-connection dropdown status dot ───────────── */
+.status-dot { font-size: 0.5rem; vertical-align: middle; }
+
 /* ── Log level colours ───────────────────────────────── */
 .log-info  { color: #374151; }
 .log-warn  { color: #d97706; }

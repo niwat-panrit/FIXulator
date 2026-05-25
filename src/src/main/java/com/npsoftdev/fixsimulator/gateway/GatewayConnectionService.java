@@ -204,6 +204,28 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     }
 
     @Override
+    public void setTxSequence(String sessionId, int nextNum) {
+        resolve(sessionId).ifPresent(sid -> {
+            try {
+                session.setNextSenderNum(sid, nextNum);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to set TX sequence for session: " + sessionId, e);
+            }
+        });
+    }
+
+    @Override
+    public void setRxSequence(String sessionId, int nextNum) {
+        resolve(sessionId).ifPresent(sid -> {
+            try {
+                session.setNextTargetNum(sid, nextNum);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to set RX sequence for session: " + sessionId, e);
+            }
+        });
+    }
+
+    @Override
     public void addSession(NewSessionRequest request) {
         sessionAdder.accept(request);
     }

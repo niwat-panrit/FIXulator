@@ -56,6 +56,12 @@ public interface ConnectionService {
     /** Resets TX and RX sequence numbers to 1. */
     void resetSequence(String sessionId);
 
+    /** Sets the next outbound (TX) sequence number for the given session. */
+    void setTxSequence(String sessionId, int nextNum);
+
+    /** Sets the next inbound (RX) sequence number for the given session. */
+    void setRxSequence(String sessionId, int nextNum);
+
     /** Parameters for creating a new FIX session at runtime. */
     record NewSessionRequest(
             String  connectionType,   // "Initiator" | "Acceptor"
