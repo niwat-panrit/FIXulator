@@ -6,10 +6,35 @@ import com.npsoftdev.fixsimulator.gateway.GatewayOrderService;
 import com.npsoftdev.fixsimulator.gateway.GatewayTradeService;
 import com.npsoftdev.fixsimulator.gateway.LiveSessionFacade;
 import com.npsoftdev.fixsimulator.pages.BasePage;
+import com.npsoftdev.fixsimulator.template.DefaultFixMessageBuilder;
+import com.npsoftdev.fixsimulator.template.DefaultPlaceholderResolver;
+import com.npsoftdev.fixsimulator.template.DefaultTemplateService;
+import com.npsoftdev.fixsimulator.template.FieldSpec;
+import com.npsoftdev.fixsimulator.template.FixMessageBuilder;
+import com.npsoftdev.fixsimulator.template.FixMessageTemplate;
+import com.npsoftdev.fixsimulator.template.InMemoryTemplateRepository;
+import com.npsoftdev.fixsimulator.template.InMemoryValueMappingService;
+import com.npsoftdev.fixsimulator.template.PlaceholderResolver;
+import com.npsoftdev.fixsimulator.template.PlaceholderType;
+import com.npsoftdev.fixsimulator.template.TemplateRepository;
+import com.npsoftdev.fixsimulator.template.TemplateScope;
+import com.npsoftdev.fixsimulator.template.TemplateService;
+import com.npsoftdev.fixsimulator.template.ValueMappingService;
 import quickfix.FieldNotFound;
 import quickfix.Message;
 import quickfix.SessionID;
 import quickfix.field.MsgType;
+import quickfix.field.ClOrdID;
+import quickfix.field.HandlInst;
+import quickfix.field.OrdType;
+import quickfix.field.OrderQty;
+import quickfix.field.Price;
+import quickfix.field.SecurityID;
+import quickfix.field.SecurityIDSource;
+import quickfix.field.Side;
+import quickfix.field.Symbol;
+import quickfix.field.TimeInForce;
+import quickfix.field.TransactTime;
 
 /**
  * Plugin that owns the order and trade domain.
@@ -46,6 +71,13 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
     private GatewayOrderService orderService;
     private GatewayTradeService tradeService;
 
+    // ── Template stack ────────────────────────────────────────────────────────
+    private TemplateRepository    templateRepository;
+    private PlaceholderResolver   placeholderResolver;
+    private ValueMappingService   valueMappingService;
+    private FixMessageBuilder     messageBuilder;
+    private TemplateService       templateService;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public DefaultOrderManagerPlugin(String id, String label, String iconClass,
@@ -69,19 +101,77 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
 
     @Override
     public void initialize(FixSimulatorApplication app) {
-        orderService = new GatewayOrderService(gateway.getSessionIDs(), new LiveSessionFacade());
+        LiveSessionFacade facade = new LiveSessionFacade();
+
+        orderService = new GatewayOrderService(gateway.getSessionIDs(), facade);
         tradeService = new GatewayTradeService();
+
+        // ── Template stack ────────────────────────────────────────────────────
+        // Swap any of these for a persistent implementation later; the wiring
+        // is the only thing that has to change.
+        templateRepository  = new InMemoryTemplateRepository();
+        placeholderResolver = new DefaultPlaceholderResolver();
+        valueMappingService = new InMemoryValueMappingService();
+        messageBuilder      = new DefaultFixMessageBuilder(placeholderResolver, valueMappingService);
+        templateService     = new DefaultTemplateService(
+                templateRepository, messageBuilder,
+                facade::sendToTarget, gateway.getSessionIDs());
+
+        seedBuiltInTemplates(templateRepository);
 
         gateway.addMessageListener(new OrderManagerListener());
 
         app.setOrderService(orderService);
         app.setTradeService(tradeService);
+        app.setTemplateService(templateService);
+        app.setValueMappingService(valueMappingService);
+    }
+
+    /**
+     * Seeds a starter "New Order Single" template that exercises every
+     * {@link com.npsoftdev.fixsimulator.template.FieldValue} variant:
+     * <ul>
+     *   <li>{@link com.npsoftdev.fixsimulator.template.FieldValue.Placeholder Placeholder}
+     *       for ClOrdID and TransactTime;</li>
+     *   <li>{@link com.npsoftdev.fixsimulator.template.FieldValue.UserInput UserInput}
+     *       for Symbol, Side, OrderQty, Price, OrdType, TimeInForce;</li>
+     *   <li>{@link com.npsoftdev.fixsimulator.template.FieldValue.Derived Derived}
+     *       for SecurityID (looks up the ISIN for the user-entered Symbol);</li>
+     *   <li>{@link com.npsoftdev.fixsimulator.template.FieldValue.Literal Literal}
+     *       for SecurityIDSource ("4" = ISIN) and HandlInst ("1" = automated).</li>
+     * </ul>
+     * Override / delete from the UI later — this exists only so the template
+     * engine has something to validate against on first run.
+     */
+    private static void seedBuiltInTemplates(TemplateRepository repo) {
+        repo.save(FixMessageTemplate.builder()
+                .id("built-in.nos.default")
+                .name("New Order Single — default")
+                .description("Auto-fills ClOrdID, TransactTime, and ISIN. "
+                           + "Edit overrides per request.")
+                .msgType(MsgType.ORDER_SINGLE)            // "D"
+                .scope(TemplateScope.global())
+                .addField(FieldSpec.placeholder(ClOrdID.FIELD,      PlaceholderType.ORDER_ID))
+                .addField(FieldSpec.placeholder(TransactTime.FIELD, PlaceholderType.TRANSACT_TIME))
+                .addField(FieldSpec.userInput  (Symbol.FIELD,       "symbol"))
+                .addField(FieldSpec.derived    (SecurityID.FIELD,   Symbol.FIELD, "symbol-to-isin"))
+                .addField(FieldSpec.literal    (SecurityIDSource.FIELD, "4"))   // ISIN
+                .addField(FieldSpec.userInput  (Side.FIELD,         "side"))
+                .addField(FieldSpec.userInput  (OrderQty.FIELD,     "quantity"))
+                .addField(FieldSpec.userInput  (Price.FIELD,        "price"))
+                .addField(FieldSpec.userInput  (OrdType.FIELD,      "ordType",     "2"))   // Limit
+                .addField(FieldSpec.userInput  (TimeInForce.FIELD,  "timeInForce", "0"))   // Day
+                .addField(FieldSpec.literal    (HandlInst.FIELD,    "1"))   // Automated
+                .build());
     }
 
     // ── Service accessors ─────────────────────────────────────────────────────
 
-    public GatewayOrderService getOrderService() { return orderService; }
-    public GatewayTradeService getTradeService() { return tradeService; }
+    public GatewayOrderService getOrderService()   { return orderService; }
+    public GatewayTradeService getTradeService()   { return tradeService; }
+    public TemplateService     getTemplateService(){ return templateService; }
+    public TemplateRepository  getTemplateRepository() { return templateRepository; }
+    public ValueMappingService getValueMappingService(){ return valueMappingService; }
 
     // ── Message routing ───────────────────────────────────────────────────────
 

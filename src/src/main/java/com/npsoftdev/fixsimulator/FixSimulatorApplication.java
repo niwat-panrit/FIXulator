@@ -9,6 +9,8 @@ import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.service.MessageLogService;
 import com.npsoftdev.fixsimulator.service.OrderService;
 import com.npsoftdev.fixsimulator.service.TradeService;
+import com.npsoftdev.fixsimulator.template.TemplateService;
+import com.npsoftdev.fixsimulator.template.ValueMappingService;
 import org.apache.wicket.Page;
 import org.apache.wicket.Session;
 import org.apache.wicket.csp.CSPDirective;
@@ -36,6 +38,8 @@ public class FixSimulatorApplication extends WebApplication {
     private MessageLogService messageLogService;
     private OrderService      orderService;
     private TradeService      tradeService;
+    private TemplateService   templateService;
+    private ValueMappingService valueMappingService;
 
     // ── WebApplication ────────────────────────────────────────────────────────
 
@@ -82,6 +86,8 @@ public class FixSimulatorApplication extends WebApplication {
     public MessageLogService getMessageLogService() { return messageLogService; }
     public OrderService      getOrderService()      { return orderService; }
     public TradeService      getTradeService()      { return tradeService; }
+    public TemplateService   getTemplateService()   { return templateService; }
+    public ValueMappingService getValueMappingService() { return valueMappingService; }
 
     /** Called by {@link DefaultFixGatewayPlugin#initialize}. */
     public void setConnectionService(ConnectionService cs) { this.connectionService = cs; }
@@ -94,6 +100,12 @@ public class FixSimulatorApplication extends WebApplication {
 
     /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
     public void setTradeService(TradeService ts) { this.tradeService = ts; }
+
+    /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
+    public void setTemplateService(TemplateService ts) { this.templateService = ts; }
+
+    /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
+    public void setValueMappingService(ValueMappingService vms) { this.valueMappingService = vms; }
 
     // ── Plugin registration ───────────────────────────────────────────────────
 

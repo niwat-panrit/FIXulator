@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.gateway;
 
 import com.npsoftdev.fixsimulator.service.OrderService;
+import com.npsoftdev.fixsimulator.template.MessageSnapshot;
 import quickfix.*;
 import quickfix.field.*;
 import quickfix.fix44.NewOrderSingle;
@@ -32,6 +33,15 @@ public class GatewayOrderService implements OrderService, Serializable {
     private final Map<String, CopyOnWriteArrayList<Map<Integer, String>>> orders =
             new ConcurrentHashMap<>();
 
+    /**
+     * Structured snapshots of each outbound order, keyed by
+     * {@code sessionIdString -> clOrdId -> snapshot}. Preserves header / body
+     * separation that the flat {@link #orders} map loses; consumed by the
+     * "save as template" flow via {@link #findSnapshot(String, String)}.
+     */
+    private final Map<String, Map<String, MessageSnapshot>> snapshots =
+            new ConcurrentHashMap<>();
+
     private final AtomicLong clOrdIdSeq = new AtomicLong(System.currentTimeMillis());
     private final SessionFacade session;
 
@@ -48,8 +58,16 @@ public class GatewayOrderService implements OrderService, Serializable {
             String msgType = message.getHeader().getString(MsgType.FIELD);
             if (MsgType.ORDER_SINGLE.equals(msgType)
                     || MsgType.ORDER_CANCEL_REQUEST.equals(msgType)) {
+                Map<Integer, String> flat = extractFields(message);
                 orders.computeIfAbsent(sessionID.toString(), k -> new CopyOnWriteArrayList<>())
-                      .add(0, extractFields(message));
+                      .add(0, flat);
+
+                // Parallel structured snapshot — used by "save as template".
+                String clOrdId = flat.get(ClOrdID.FIELD);
+                if (clOrdId != null) {
+                    snapshots.computeIfAbsent(sessionID.toString(), k -> new ConcurrentHashMap<>())
+                             .put(clOrdId, MessageSnapshot.capture(message));
+                }
             }
         } catch (FieldNotFound ignored) {}
     }
@@ -118,6 +136,13 @@ public class GatewayOrderService implements OrderService, Serializable {
     public List<Map<Integer, String>> listOrders(String sessionId) {
         List<Map<Integer, String>> list = orders.get(sessionId);
         return list != null ? Collections.unmodifiableList(list) : List.of();
+    }
+
+    @Override
+    public Optional<MessageSnapshot> findSnapshot(String sessionId, String clOrdId) {
+        Map<String, MessageSnapshot> bySession = snapshots.get(sessionId);
+        if (bySession == null) return Optional.empty();
+        return Optional.ofNullable(bySession.get(clOrdId));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
