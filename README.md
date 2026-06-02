@@ -35,6 +35,25 @@ claude
 
 ---
 
+## Running the Application
+
+The application is a Maven-based Java project (Apache Wicket + embedded Jetty), located in the `src/` directory.
+
+```bash
+# Start the dev server (recommended)
+cd src && mvn jetty:run
+```
+
+The app will be available at **http://localhost:8080**.
+
+To build and run the packaged WAR instead:
+
+```bash
+cd src && mvn package && java -jar target/*.war
+```
+
+---
+
 ## Java Versions
 
 The container ships with **JDK 17** (default) and **JDK 21** installed side-by-side via SDKMAN.
