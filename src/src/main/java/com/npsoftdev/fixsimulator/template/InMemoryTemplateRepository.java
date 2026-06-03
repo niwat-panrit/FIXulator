@@ -52,6 +52,11 @@ public class InMemoryTemplateRepository implements TemplateRepository {
 
     @Override
     public void delete(String id) {
+        FixMessageTemplate t = byId.get(id);
+        if (t != null && t.isDeletionProtected()) {
+            throw new IllegalStateException(
+                    "Template '" + t.name() + "' is a built-in template and cannot be deleted.");
+        }
         byId.remove(id);
     }
 }

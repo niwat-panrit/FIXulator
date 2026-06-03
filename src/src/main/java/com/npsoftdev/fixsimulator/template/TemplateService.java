@@ -45,6 +45,9 @@ public interface TemplateService extends Serializable {
 
     List<FixMessageTemplate> findVisibleTo(String sessionId);
 
+    /** All templates regardless of scope — used by the admin management page. */
+    List<FixMessageTemplate> findAll();
+
     java.util.Optional<FixMessageTemplate> findById(String templateId);
 
     void save(FixMessageTemplate template);

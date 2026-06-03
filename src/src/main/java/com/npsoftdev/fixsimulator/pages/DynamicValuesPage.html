@@ -1,0 +1,147 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+<!-- Page Header -->
+<div class="page-header">
+    <h4><i class="bi bi-braces me-2 text-primary"></i>Dynamic Values</h4>
+</div>
+
+<!-- ── BUILT-IN TOKENS ─────────────────────────────────────────────────── -->
+<div class="table-card mb-4">
+    <div class="d-flex align-items-center gap-2 px-3 pt-3 pb-2">
+        <h6 class="fw-semibold mb-0">
+            <i class="bi bi-cpu me-2 text-secondary"></i>Built-in Tokens
+        </h6>
+        <span class="badge bg-secondary ms-1">Read-only</span>
+    </div>
+    <p class="px-3 text-muted mb-2" style="font-size:0.83rem;">
+        These tokens are resolved automatically by the engine at send time.
+        Use them in any FIX field value inside a template by embedding the
+        <code>$(token_name)</code> syntax.
+    </p>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead>
+                <tr class="table-dark">
+                    <th style="width:160px;">Usage</th>
+                    <th style="width:140px;">Token Name</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody wicket:id="builtInBody">
+                <tr wicket:id="builtInRows">
+                    <td class="font-monospace fw-semibold text-primary" wicket:id="biUsage"></td>
+                    <td class="font-monospace text-secondary" wicket:id="biName"></td>
+                    <td class="text-muted" style="font-size:0.82rem;" wicket:id="biDescription"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── CUSTOM CONSTANT TOKENS ─────────────────────────────────────────── -->
+<div class="table-card mb-4">
+    <div class="d-flex align-items-center gap-2 px-3 pt-3 pb-2">
+        <h6 class="fw-semibold mb-0">
+            <i class="bi bi-bookmark-plus me-2 text-secondary"></i>Custom Constants
+        </h6>
+        <span class="badge bg-info text-dark ms-1">Manageable</span>
+    </div>
+    <p class="px-3 text-muted mb-2" style="font-size:0.83rem;">
+        Define named constants that resolve to a fixed string value at send time.
+        Useful for values like firm IDs, account codes, and default currencies.
+    </p>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead>
+                <tr class="table-dark">
+                    <th style="width:160px;">Usage</th>
+                    <th style="width:140px;">Token Name</th>
+                    <th>Description</th>
+                    <th>Value</th>
+                    <th style="width:60px;"></th>
+                </tr>
+            </thead>
+            <tbody wicket:id="customBody">
+
+                <tr wicket:id="emptyCustomRow">
+                    <td colspan="5" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox me-1"></i>
+                        No custom constants yet — add one below.
+                    </td>
+                </tr>
+
+                <tr wicket:id="customRows">
+                    <td class="font-monospace fw-semibold text-primary" wicket:id="cvUsage"></td>
+                    <td class="font-monospace text-secondary" wicket:id="cvName"></td>
+                    <td class="text-muted" style="font-size:0.82rem;" wicket:id="cvDescription"></td>
+                    <td class="font-monospace" style="font-size:0.82rem;" wicket:id="cvValue"></td>
+                    <td class="text-center">
+                        <a wicket:id="deleteCustomBtn"
+                           class="btn btn-sm btn-outline-danger py-0 px-2"
+                           title="Remove">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── ADD CUSTOM CONSTANT ─────────────────────────────────────────────── -->
+<div class="table-card">
+    <div class="px-3 pt-3 pb-2">
+        <h6 class="fw-semibold mb-3">
+            <i class="bi bi-plus-circle me-2 text-secondary"></i>Add Custom Constant
+        </h6>
+    </div>
+    <form wicket:id="addForm" class="px-3 pb-3">
+        <div wicket:id="feedback" class="mb-3"></div>
+        <div class="row g-3">
+
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">
+                    Token Name <span class="text-danger">*</span>
+                </label>
+                <input type="text" wicket:id="name"
+                       class="form-control form-control-sm font-monospace"
+                       placeholder="e.g. firm_id"/>
+                <div class="form-text">
+                    Alphanumeric + underscores. Non-alphanumeric characters are
+                    converted to underscores automatically.
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Description</label>
+                <input type="text" wicket:id="description"
+                       class="form-control form-control-sm"
+                       placeholder="e.g. Trading firm identifier"/>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">
+                    Value <span class="text-danger">*</span>
+                </label>
+                <textarea wicket:id="constantValue"
+                          class="form-control form-control-sm font-monospace"
+                          rows="1"
+                          placeholder="e.g. MYCOMPANY"></textarea>
+            </div>
+
+            <div class="col-md-1 d-flex align-items-end">
+                <button wicket:id="addBtn" class="btn btn-sm btn-primary w-100">
+                    <i class="bi bi-plus me-1"></i>Add
+                </button>
+            </div>
+
+        </div>
+    </form>
+</div>
+
+</wicket:extend>
+</body>
+</html>

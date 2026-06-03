@@ -9,9 +9,11 @@ import com.npsoftdev.fixsimulator.pages.BasePage;
 import com.npsoftdev.fixsimulator.template.DefaultFixMessageBuilder;
 import com.npsoftdev.fixsimulator.template.DefaultPlaceholderResolver;
 import com.npsoftdev.fixsimulator.template.DefaultTemplateService;
+import com.npsoftdev.fixsimulator.template.DynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.FieldSpec;
 import com.npsoftdev.fixsimulator.template.FixMessageBuilder;
 import com.npsoftdev.fixsimulator.template.FixMessageTemplate;
+import com.npsoftdev.fixsimulator.template.InMemoryDynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.InMemoryTemplateRepository;
 import com.npsoftdev.fixsimulator.template.InMemoryValueMappingService;
 import com.npsoftdev.fixsimulator.template.PlaceholderResolver;
@@ -28,6 +30,7 @@ import quickfix.field.ClOrdID;
 import quickfix.field.HandlInst;
 import quickfix.field.OrdType;
 import quickfix.field.OrderQty;
+import quickfix.field.OrigClOrdID;
 import quickfix.field.Price;
 import quickfix.field.SecurityID;
 import quickfix.field.SecurityIDSource;
@@ -75,6 +78,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
     private TemplateRepository    templateRepository;
     private PlaceholderResolver   placeholderResolver;
     private ValueMappingService   valueMappingService;
+    private DynamicValueRegistry  dynamicValueRegistry;
     private FixMessageBuilder     messageBuilder;
     private TemplateService       templateService;
 
@@ -109,11 +113,13 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         // ── Template stack ────────────────────────────────────────────────────
         // Swap any of these for a persistent implementation later; the wiring
         // is the only thing that has to change.
-        templateRepository  = new InMemoryTemplateRepository();
-        placeholderResolver = new DefaultPlaceholderResolver();
-        valueMappingService = new InMemoryValueMappingService();
-        messageBuilder      = new DefaultFixMessageBuilder(placeholderResolver, valueMappingService);
-        templateService     = new DefaultTemplateService(
+        templateRepository   = new InMemoryTemplateRepository();
+        placeholderResolver  = new DefaultPlaceholderResolver();
+        valueMappingService  = new InMemoryValueMappingService();
+        dynamicValueRegistry = new InMemoryDynamicValueRegistry();
+        messageBuilder       = new DefaultFixMessageBuilder(
+                placeholderResolver, valueMappingService, dynamicValueRegistry);
+        templateService      = new DefaultTemplateService(
                 templateRepository, messageBuilder,
                 facade::sendToTarget, gateway.getSessionIDs());
 
@@ -125,6 +131,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         app.setTradeService(tradeService);
         app.setTemplateService(templateService);
         app.setValueMappingService(valueMappingService);
+        app.setDynamicValueRegistry(dynamicValueRegistry);
     }
 
     /**
@@ -147,6 +154,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         repo.save(FixMessageTemplate.builder()
                 .id("built-in.nos.default")
                 .name("New Order Single — default")
+                .deletionProtected(true)
                 .description("Auto-fills ClOrdID, TransactTime, and ISIN. "
                            + "Edit overrides per request.")
                 .msgType(MsgType.ORDER_SINGLE)            // "D"
@@ -163,15 +171,37 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
                 .addField(FieldSpec.userInput  (TimeInForce.FIELD,  "timeInForce", "0"))   // Day
                 .addField(FieldSpec.literal    (HandlInst.FIELD,    "1"))   // Automated
                 .build());
+
+        repo.save(FixMessageTemplate.builder()
+                .id("built-in.ocr.default")
+                .name("Order Cancel/Replace — default")
+                .deletionProtected(true)
+                .description("Amend an open order. OrigClOrdID is pre-filled from the selected row.")
+                .msgType(MsgType.ORDER_CANCEL_REPLACE_REQUEST)   // "G"
+                .scope(TemplateScope.global())
+                .addField(FieldSpec.placeholder(ClOrdID.FIELD,      PlaceholderType.ORDER_ID))
+                .addField(FieldSpec.placeholder(TransactTime.FIELD, PlaceholderType.TRANSACT_TIME))
+                .addField(FieldSpec.userInput  (OrigClOrdID.FIELD,  "origClOrdId"))
+                .addField(FieldSpec.userInput  (Symbol.FIELD,       "symbol"))
+                .addField(FieldSpec.derived    (SecurityID.FIELD,   Symbol.FIELD, "symbol-to-isin"))
+                .addField(FieldSpec.literal    (SecurityIDSource.FIELD, "4"))   // ISIN
+                .addField(FieldSpec.userInput  (Side.FIELD,         "side"))
+                .addField(FieldSpec.userInput  (OrderQty.FIELD,     "quantity"))
+                .addField(FieldSpec.userInput  (Price.FIELD,        "price"))
+                .addField(FieldSpec.userInput  (OrdType.FIELD,      "ordType",     "2"))   // Limit
+                .addField(FieldSpec.userInput  (TimeInForce.FIELD,  "timeInForce", "0"))   // Day
+                .addField(FieldSpec.literal    (HandlInst.FIELD,    "1"))   // Automated
+                .build());
     }
 
     // ── Service accessors ─────────────────────────────────────────────────────
 
-    public GatewayOrderService getOrderService()   { return orderService; }
-    public GatewayTradeService getTradeService()   { return tradeService; }
-    public TemplateService     getTemplateService(){ return templateService; }
-    public TemplateRepository  getTemplateRepository() { return templateRepository; }
-    public ValueMappingService getValueMappingService(){ return valueMappingService; }
+    public GatewayOrderService  getOrderService()          { return orderService; }
+    public GatewayTradeService  getTradeService()          { return tradeService; }
+    public TemplateService      getTemplateService()       { return templateService; }
+    public TemplateRepository   getTemplateRepository()    { return templateRepository; }
+    public ValueMappingService  getValueMappingService()   { return valueMappingService; }
+    public DynamicValueRegistry getDynamicValueRegistry()  { return dynamicValueRegistry; }
 
     // ── Message routing ───────────────────────────────────────────────────────
 

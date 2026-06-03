@@ -31,25 +31,29 @@ public final class FixMessageTemplate implements Serializable {
     private final String msgType;
     private final TemplateScope scope;
     private final List<FieldSpec> fields;
+    /** When {@code true} the template cannot be deleted via the UI or repository. */
+    private final boolean deletionProtected;
 
     private FixMessageTemplate(Builder b) {
-        this.id          = Objects.requireNonNull(b.id, "id");
-        this.name        = Objects.requireNonNull(b.name, "name");
-        this.description = b.description == null ? "" : b.description;
-        this.beginString = Objects.requireNonNull(b.beginString, "beginString");
-        this.msgType     = Objects.requireNonNull(b.msgType, "msgType");
-        this.scope       = Objects.requireNonNull(b.scope, "scope");
-        this.fields      = List.copyOf(b.fields);
+        this.id                = Objects.requireNonNull(b.id, "id");
+        this.name              = Objects.requireNonNull(b.name, "name");
+        this.description       = b.description == null ? "" : b.description;
+        this.beginString       = Objects.requireNonNull(b.beginString, "beginString");
+        this.msgType           = Objects.requireNonNull(b.msgType, "msgType");
+        this.scope             = Objects.requireNonNull(b.scope, "scope");
+        this.fields            = List.copyOf(b.fields);
+        this.deletionProtected = b.deletionProtected;
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
-    public String id()              { return id; }
-    public String name()            { return name; }
-    public String description()     { return description; }
-    public String beginString()     { return beginString; }
-    public String msgType()         { return msgType; }
-    public TemplateScope scope()    { return scope; }
+    public String id()                   { return id; }
+    public String name()                 { return name; }
+    public String description()          { return description; }
+    public String beginString()          { return beginString; }
+    public String msgType()              { return msgType; }
+    public TemplateScope scope()         { return scope; }
+    public boolean isDeletionProtected() { return deletionProtected; }
 
     /** Unmodifiable ordered list of field specs. */
     public List<FieldSpec> fields() { return fields; }
@@ -62,6 +66,7 @@ public final class FixMessageTemplate implements Serializable {
         return new Builder()
                 .id(id).name(name).description(description)
                 .beginString(beginString).msgType(msgType).scope(scope)
+                .deletionProtected(deletionProtected)
                 .fields(fields);
     }
 
@@ -73,13 +78,15 @@ public final class FixMessageTemplate implements Serializable {
         private String msgType;
         private TemplateScope scope = TemplateScope.global();
         private final List<FieldSpec> fields = new ArrayList<>();
+        private boolean deletionProtected = false;
 
-        public Builder id(String id)                     { this.id = id; return this; }
-        public Builder name(String name)                 { this.name = name; return this; }
-        public Builder description(String description)   { this.description = description; return this; }
-        public Builder beginString(String beginString)   { this.beginString = beginString; return this; }
-        public Builder msgType(String msgType)           { this.msgType = msgType; return this; }
-        public Builder scope(TemplateScope scope)        { this.scope = scope; return this; }
+        public Builder id(String id)                           { this.id = id; return this; }
+        public Builder name(String name)                       { this.name = name; return this; }
+        public Builder description(String description)         { this.description = description; return this; }
+        public Builder beginString(String beginString)         { this.beginString = beginString; return this; }
+        public Builder msgType(String msgType)                 { this.msgType = msgType; return this; }
+        public Builder scope(TemplateScope scope)              { this.scope = scope; return this; }
+        public Builder deletionProtected(boolean v)            { this.deletionProtected = v; return this; }
 
         public Builder addField(FieldSpec spec) {
             fields.add(Objects.requireNonNull(spec, "spec"));
@@ -118,6 +125,7 @@ public final class FixMessageTemplate implements Serializable {
         return new Builder()
                 .id(id).name(name).description(description)
                 .beginString(beginString).msgType(msgType).scope(scope)
+                .deletionProtected(deletionProtected)
                 .fields(Collections.unmodifiableList(new ArrayList<>(fields)))
                 .build();
     }

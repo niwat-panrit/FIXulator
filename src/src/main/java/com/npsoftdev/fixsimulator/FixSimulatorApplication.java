@@ -1,6 +1,15 @@
 package com.npsoftdev.fixsimulator;
 
-import com.npsoftdev.fixsimulator.pages.*;
+import com.npsoftdev.fixsimulator.pages.ConnectionManagementPage;
+import com.npsoftdev.fixsimulator.pages.DynamicValuesPage;
+import com.npsoftdev.fixsimulator.pages.HomePage;
+import com.npsoftdev.fixsimulator.pages.MessageLogPage;
+import com.npsoftdev.fixsimulator.pages.OrdersPage;
+import com.npsoftdev.fixsimulator.pages.FixMessageTemplatesPage;
+import com.npsoftdev.fixsimulator.pages.RawMessagesPage;
+import com.npsoftdev.fixsimulator.pages.SystemLogsPage;
+import com.npsoftdev.fixsimulator.pages.TradesPage;
+import com.npsoftdev.fixsimulator.pages.UserManagementPage;
 import com.npsoftdev.fixsimulator.plugin.DefaultFixGatewayPlugin;
 import com.npsoftdev.fixsimulator.plugin.DefaultOrderManagerPlugin;
 import com.npsoftdev.fixsimulator.plugin.NavSection;
@@ -9,6 +18,7 @@ import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.service.MessageLogService;
 import com.npsoftdev.fixsimulator.service.OrderService;
 import com.npsoftdev.fixsimulator.service.TradeService;
+import com.npsoftdev.fixsimulator.template.DynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.TemplateService;
 import com.npsoftdev.fixsimulator.template.ValueMappingService;
 import org.apache.wicket.Page;
@@ -34,12 +44,13 @@ public class FixSimulatorApplication extends WebApplication {
 
     // ── Services ──────────────────────────────────────────────────────────────
     // Populated by plugin initialize() hooks; see individual setters below.
-    private ConnectionService connectionService;
-    private MessageLogService messageLogService;
-    private OrderService      orderService;
-    private TradeService      tradeService;
-    private TemplateService   templateService;
-    private ValueMappingService valueMappingService;
+    private ConnectionService    connectionService;
+    private MessageLogService    messageLogService;
+    private OrderService         orderService;
+    private TradeService         tradeService;
+    private TemplateService      templateService;
+    private ValueMappingService  valueMappingService;
+    private DynamicValueRegistry dynamicValueRegistry;
 
     // ── WebApplication ────────────────────────────────────────────────────────
 
@@ -86,8 +97,9 @@ public class FixSimulatorApplication extends WebApplication {
     public MessageLogService getMessageLogService() { return messageLogService; }
     public OrderService      getOrderService()      { return orderService; }
     public TradeService      getTradeService()      { return tradeService; }
-    public TemplateService   getTemplateService()   { return templateService; }
-    public ValueMappingService getValueMappingService() { return valueMappingService; }
+    public TemplateService      getTemplateService()      { return templateService; }
+    public ValueMappingService  getValueMappingService()  { return valueMappingService; }
+    public DynamicValueRegistry getDynamicValueRegistry() { return dynamicValueRegistry; }
 
     /** Called by {@link DefaultFixGatewayPlugin#initialize}. */
     public void setConnectionService(ConnectionService cs) { this.connectionService = cs; }
@@ -105,7 +117,10 @@ public class FixSimulatorApplication extends WebApplication {
     public void setTemplateService(TemplateService ts) { this.templateService = ts; }
 
     /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
-    public void setValueMappingService(ValueMappingService vms) { this.valueMappingService = vms; }
+    public void setValueMappingService(ValueMappingService vms)     { this.valueMappingService = vms; }
+
+    /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
+    public void setDynamicValueRegistry(DynamicValueRegistry dvr)   { this.dynamicValueRegistry = dvr; }
 
     // ── Plugin registration ───────────────────────────────────────────────────
 
@@ -127,6 +142,7 @@ public class FixSimulatorApplication extends WebApplication {
                 "orders", "Orders", "bi-card-list",
                 NavSection.MONITORING, OrdersPage.class,
                 gateway));
+        // Dynamic Orders page removed — order sending is integrated into the Orders page.
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "trades", "Trades", "bi-arrow-left-right",
                 NavSection.MONITORING, TradesPage.class));
@@ -139,6 +155,12 @@ public class FixSimulatorApplication extends WebApplication {
 
         // ── Administration ────────────────────────────────────────────────────
         pluginRegistry.register(gateway);           // registered after order-manager for nav order
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
+                "fix-message-templates", "FIX Message Templates", "bi-layout-text-window-reverse",
+                NavSection.ADMIN, FixMessageTemplatesPage.class));
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
+                "dynamic-values", "Dynamic Values", "bi-braces",
+                NavSection.ADMIN, DynamicValuesPage.class));
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "users", "User Management", "bi-people",
                 NavSection.ADMIN, UserManagementPage.class));

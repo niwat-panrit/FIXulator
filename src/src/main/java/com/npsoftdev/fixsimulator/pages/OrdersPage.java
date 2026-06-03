@@ -3,6 +3,10 @@ package com.npsoftdev.fixsimulator.pages;
 import com.npsoftdev.fixsimulator.FixSimulatorApplication;
 import com.npsoftdev.fixsimulator.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.service.OrderService;
+import com.npsoftdev.fixsimulator.template.FieldSpec;
+import com.npsoftdev.fixsimulator.template.FieldValue;
+import com.npsoftdev.fixsimulator.template.FixMessageTemplate;
+import com.npsoftdev.fixsimulator.template.TemplateService;
 import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
@@ -17,32 +21,65 @@ import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.form.NumberTextField;
-import org.apache.wicket.markup.html.form.TextArea;
 import org.apache.wicket.markup.html.form.TextField;
 import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.ListView;
 import org.apache.wicket.markup.html.panel.FeedbackPanel;
 import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.LoadableDetachableModel;
+import org.apache.wicket.model.PropertyModel;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class OrdersPage extends BasePage {
+
+    /** FIX tags rendered via the structured form controls — excluded from extra-fields list. */
+    private static final Set<Integer> STANDARD_TAGS = Set.of(
+            55,  // Symbol
+            54,  // Side
+            44,  // Price
+            38,  // OrderQty
+            40,  // OrdType
+            59,  // TimeInForce
+            41   // OrigClOrdID — handled via amend model's origClOrdId field
+    );
+
+    // ── Page-level amend state ─────────────────────────────────────────────────
+    private final AmendModel amendModel = new AmendModel();
+    private Form<AmendModel> amendOrderForm;
 
     public OrdersPage() {
         super();
 
         FilterModel filter = new FilterModel();
 
-        // ── Orders table body (auto-refreshed every 3 s) ─────────────────────
+        // ── Pre-load templates so extra-fields are available at construction time
+        NewOrderModel newOrderModel = new NewOrderModel();
+        FixMessageTemplate nosTmpl = findTemplate("D");
+        if (nosTmpl != null) {
+            newOrderModel.templateId   = nosTmpl.id();
+            newOrderModel.extraFields  = loadExtraFields(nosTmpl);
+        }
+        FixMessageTemplate ocrTmpl = findTemplate("G");
+        if (ocrTmpl != null) {
+            amendModel.templateId  = ocrTmpl.id();
+            amendModel.extraFields = loadExtraFields(ocrTmpl);
+        }
 
+        // ── Build amend form first so the amend button can reference it ─────────
+        amendOrderForm = buildAmendOrderForm(amendModel);
+        amendOrderForm.setOutputMarkupId(true);
+
+        // ── Orders table body (auto-refreshed every 3 s) ─────────────────────
         WebMarkupContainer tableBody = new WebMarkupContainer("tableBody");
         tableBody.setOutputMarkupId(true);
         tableBody.add(new AjaxSelfUpdatingTimerBehavior(Duration.ofSeconds(3)));
@@ -61,7 +98,6 @@ public class OrdersPage extends BasePage {
                     }
                 };
 
-        // Empty-state row — shown when no orders match
         WebMarkupContainer emptyRow = new WebMarkupContainer("emptyRow") {
             @Override
             protected void onConfigure() {
@@ -71,14 +107,13 @@ public class OrdersPage extends BasePage {
         };
         tableBody.add(emptyRow);
 
-        // One row per order
         tableBody.add(new ListView<Map<Integer, String>>("orderRows", ordersModel) {
             @Override
             protected void populateItem(ListItem<Map<Integer, String>> item) {
                 Map<Integer, String> o = item.getModelObject();
-                String clOrdId   = o.getOrDefault(11, "");
-                String side      = o.getOrDefault(54, "");
-                String ordStatus = o.getOrDefault(39, "");
+                final String clOrdId   = o.getOrDefault(11, "");
+                final String side      = o.getOrDefault(54, "");
+                final String ordStatus = o.getOrDefault(39, "");
 
                 item.add(new Label("clOrdId", clOrdId));
                 item.add(new Label("symbol", o.getOrDefault(55, "")));
@@ -87,9 +122,9 @@ public class OrdersPage extends BasePage {
                 sideLabel.add(AttributeModifier.replace("class", "badge " + sideBadgeClass(side)));
                 item.add(sideLabel);
 
-                item.add(new Label("quantity", o.getOrDefault(38, "")));
-                item.add(new Label("price",    nvl(o.get(44))));
-                item.add(new Label("ordType",  displayOrdType(o.getOrDefault(40, ""))));
+                item.add(new Label("quantity",    o.getOrDefault(38, "")));
+                item.add(new Label("price",       nvl(o.get(44))));
+                item.add(new Label("ordType",     displayOrdType(o.getOrDefault(40, ""))));
                 item.add(new Label("timeInForce", displayTif(o.getOrDefault(59, ""))));
 
                 Label statusLabel = new Label("status", displayStatus(ordStatus));
@@ -101,15 +136,28 @@ public class OrdersPage extends BasePage {
                 item.add(new Label("avgPx",    nvl(o.get(6))));
                 item.add(new Label("sendTime", formatSendTime(o.getOrDefault(60, ""))));
 
-                // ── Amend icon button (placeholder — no amend service method yet) ──
+                // ── Amend button — pre-populates and opens the amend modal ────
                 item.add(new AjaxLink<Void>("amendBtn") {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
-                        // TODO: open amend (OrderCancelReplaceRequest) dialog
+                        amendModel.origClOrdId  = clOrdId;
+                        amendModel.symbol       = o.getOrDefault(55, "");
+                        amendModel.side         = displaySide(o.getOrDefault(54, "1"));
+                        String rawQty = o.getOrDefault(38, "");
+                        amendModel.quantity     = blank(rawQty) ? null : new BigDecimal(rawQty);
+                        String rawPx = o.getOrDefault(44, "");
+                        amendModel.price        = blank(rawPx)  ? null : new BigDecimal(rawPx);
+                        amendModel.ordType      = displayOrdType(o.getOrDefault(40, "2"));
+                        amendModel.timeInForce  = displayTif(o.getOrDefault(59, "0"));
+                        amendModel.extraFields.forEach(
+                                e -> e.value = e.defaultValue != null ? e.defaultValue : "");
+                        target.add(amendOrderForm);
+                        target.appendJavaScript(
+                                "new bootstrap.Modal(document.getElementById('amendOrderModal')).show();");
                     }
                 });
 
-                // ── Cancel icon button ────────────────────────────────────────
+                // ── Cancel button ─────────────────────────────────────────────
                 item.add(new AjaxLink<Void>("cancelBtn") {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
@@ -132,15 +180,13 @@ public class OrdersPage extends BasePage {
             }
         });
 
-        // ── Filter form (wraps the table; AJAX-updates tableBody on change) ───
-
+        // ── Filter form (wraps table) ─────────────────────────────────────────
         Form<FilterModel> filterForm = new Form<>("filterForm",
                 new CompoundPropertyModel<>(filter));
         filterForm.add(tableBody);
 
         addTextFilter(filterForm, "filterClOrdId", tableBody);
         addTextFilter(filterForm, "filterSymbol",  tableBody);
-
         addDropFilter(filterForm, "filterSide",
                 List.of("BUY", "SELL"), tableBody);
         addDropFilter(filterForm, "filterOrdType",
@@ -151,20 +197,17 @@ public class OrdersPage extends BasePage {
                 List.of("New", "PartFilled", "Filled", "Cancelled", "Rejected", "Pending"), tableBody);
 
         add(filterForm);
-
-        // ── New Order modal form ──────────────────────────────────────────────
-        add(buildNewOrderForm(new NewOrderModel()));
+        add(buildNewOrderForm(newOrderModel));
+        add(amendOrderForm);
     }
 
-    // ── Filter helper builders ────────────────────────────────────────────────
+    // ── Filter helpers ────────────────────────────────────────────────────────
 
     private static void addTextFilter(Form<?> form, String id, WebMarkupContainer tableBody) {
         TextField<String> tf = new TextField<>(id);
         tf.add(new AjaxFormComponentUpdatingBehavior("input") {
             @Override
-            protected void onUpdate(AjaxRequestTarget target) {
-                target.add(tableBody);
-            }
+            protected void onUpdate(AjaxRequestTarget target) { target.add(tableBody); }
         });
         form.add(tf);
     }
@@ -175,14 +218,10 @@ public class OrdersPage extends BasePage {
         dd.setNullValid(true);
         dd.add(new AjaxFormComponentUpdatingBehavior("change") {
             @Override
-            protected void onUpdate(AjaxRequestTarget target) {
-                target.add(tableBody);
-            }
+            protected void onUpdate(AjaxRequestTarget target) { target.add(tableBody); }
         });
         form.add(dd);
     }
-
-    // ── Filter matching ───────────────────────────────────────────────────────
 
     private static boolean matchesFilter(Map<Integer, String> o, FilterModel f) {
         if (!blank(f.filterClOrdId) &&
@@ -206,10 +245,6 @@ public class OrdersPage extends BasePage {
         return true;
     }
 
-    private static boolean blank(String s) {
-        return s == null || s.isBlank();
-    }
-
     // ── New Order form ────────────────────────────────────────────────────────
 
     private Form<NewOrderModel> buildNewOrderForm(NewOrderModel model) {
@@ -221,8 +256,7 @@ public class OrdersPage extends BasePage {
         form.add(feedback);
 
         form.add(new TextField<String>("symbol").setRequired(true));
-        form.add(new DropDownChoice<>("side",
-                List.of("BUY", "SELL")).setRequired(true));
+        form.add(new DropDownChoice<>("side", List.of("BUY", "SELL")).setRequired(true));
         form.add(new NumberTextField<BigDecimal>("quantity", BigDecimal.class)
                 .setMinimum(BigDecimal.ONE).setRequired(true));
         form.add(new NumberTextField<BigDecimal>("price", BigDecimal.class)
@@ -231,7 +265,18 @@ public class OrdersPage extends BasePage {
                 List.of("Limit", "Market", "Stop", "StopLimit")).setRequired(true));
         form.add(new DropDownChoice<>("timeInForce",
                 List.of("Day", "GTC", "IOC", "FOK")).setRequired(true));
-        form.add(new TextArea<String>("text"));
+
+        // Extra fields from template (non-standard UserInput / Enumeration)
+        WebMarkupContainer extraSection = new WebMarkupContainer("newOrderExtraSection");
+        extraSection.setVisible(!model.extraFields.isEmpty());
+        extraSection.add(new ListView<ExtraEntry>("newOrderExtraRows",
+                new PropertyModel<>(model, "extraFields")) {
+            @Override
+            protected void populateItem(ListItem<ExtraEntry> item) {
+                renderExtraFieldRow(item);
+            }
+        });
+        form.add(extraSection);
 
         form.add(new AjaxButton("sendBtn", form) {
             @Override
@@ -242,28 +287,24 @@ public class OrdersPage extends BasePage {
                     target.add(feedback);
                     return;
                 }
-                OrderService os = orderSvc();
-                if (os == null) {
-                    error("Order service is not available.");
-                    target.add(feedback);
-                    return;
-                }
-
-                Map<Integer, String> fields = new HashMap<>();
-                fields.put(55, model.symbol);                        // Symbol
-                fields.put(54, sideCode(model.side));                // Side
-                fields.put(38, model.quantity.toPlainString());      // OrderQty
-                if (model.price != null) {
-                    fields.put(44, model.price.toPlainString());     // Price
-                }
-                fields.put(40, ordTypeCode(model.ordType));          // OrdType
-                fields.put(59, tifCode(model.timeInForce));          // TimeInForce
-                if (!blank(model.text)) {
-                    fields.put(58, model.text);                      // Text
-                }
-
                 try {
-                    os.sendNewOrder(sessionId, fields);
+                    if (model.templateId != null) {
+                        TemplateService ts = templateSvc();
+                        if (ts == null) throw new IllegalStateException("Template service not available.");
+                        ts.send(sessionId, model.templateId, buildNewOverrides(model));
+                    } else {
+                        // Fallback: direct OrderService send (no template configured)
+                        OrderService os = orderSvc();
+                        if (os == null) throw new IllegalStateException("Order service not available.");
+                        Map<Integer, String> fields = new HashMap<>();
+                        fields.put(55, model.symbol);
+                        fields.put(54, sideCode(model.side));
+                        fields.put(38, model.quantity.toPlainString());
+                        if (model.price != null) fields.put(44, model.price.toPlainString());
+                        fields.put(40, ordTypeCode(model.ordType));
+                        fields.put(59, tifCode(model.timeInForce));
+                        os.sendNewOrder(sessionId, fields);
+                    }
                     model.reset();
                     target.appendJavaScript(
                             "bootstrap.Modal.getInstance(document.getElementById('newOrderModal')).hide();");
@@ -274,18 +315,166 @@ public class OrdersPage extends BasePage {
             }
 
             @Override
-            protected void onError(AjaxRequestTarget target) {
-                target.add(feedback);
-            }
+            protected void onError(AjaxRequestTarget target) { target.add(feedback); }
         });
 
         return form;
     }
 
-    // ── Service lookup ────────────────────────────────────────────────────────
+    // ── Amend Order form ──────────────────────────────────────────────────────
+
+    private Form<AmendModel> buildAmendOrderForm(AmendModel model) {
+        Form<AmendModel> form = new Form<>("amendOrderForm",
+                new CompoundPropertyModel<>(model));
+
+        FeedbackPanel feedback = new FeedbackPanel("amendFeedback");
+        feedback.setOutputMarkupId(true);
+        form.add(feedback);
+
+        form.add(new Label("origClOrdIdDisplay",
+                new PropertyModel<String>(model, "origClOrdId")));
+        form.add(new TextField<String>("symbol").setRequired(true));
+        form.add(new DropDownChoice<>("side", List.of("BUY", "SELL")).setRequired(true));
+        form.add(new NumberTextField<BigDecimal>("quantity", BigDecimal.class)
+                .setMinimum(BigDecimal.ONE).setRequired(true));
+        form.add(new NumberTextField<BigDecimal>("price", BigDecimal.class)
+                .setMinimum(BigDecimal.ZERO));
+        form.add(new DropDownChoice<>("ordType",
+                List.of("Limit", "Market", "Stop", "StopLimit")).setRequired(true));
+        form.add(new DropDownChoice<>("timeInForce",
+                List.of("Day", "GTC", "IOC", "FOK")).setRequired(true));
+
+        WebMarkupContainer extraSection = new WebMarkupContainer("amendExtraSection");
+        extraSection.setVisible(!model.extraFields.isEmpty());
+        extraSection.add(new ListView<ExtraEntry>("amendExtraRows",
+                new PropertyModel<>(model, "extraFields")) {
+            @Override
+            protected void populateItem(ListItem<ExtraEntry> item) {
+                renderExtraFieldRow(item);
+            }
+        });
+        form.add(extraSection);
+
+        form.add(new AjaxButton("amendSendBtn", form) {
+            @Override
+            protected void onSubmit(AjaxRequestTarget target) {
+                String sessionId = FixSimulatorSession.get().getActiveSessionId();
+                if (sessionId == null) {
+                    error("No active FIX session selected.");
+                    target.add(feedback);
+                    return;
+                }
+                if (blank(model.origClOrdId)) {
+                    error("OrigClOrdID is required — open this dialog from the order table.");
+                    target.add(feedback);
+                    return;
+                }
+                TemplateService ts = templateSvc();
+                if (ts == null || model.templateId == null) {
+                    error("No Amend Order template found (MsgType=G). "
+                            + "Create one in FIX Message Templates.");
+                    target.add(feedback);
+                    return;
+                }
+                try {
+                    ts.send(sessionId, model.templateId, buildAmendOverrides(model));
+                    target.appendJavaScript(
+                            "bootstrap.Modal.getInstance(document.getElementById('amendOrderModal')).hide();");
+                } catch (Exception e) {
+                    error("Failed to send amend: " + e.getMessage());
+                    target.add(feedback);
+                }
+            }
+
+            @Override
+            protected void onError(AjaxRequestTarget target) { target.add(feedback); }
+        });
+
+        return form;
+    }
+
+    // ── Extra field row rendering ─────────────────────────────────────────────
+
+    private static void renderExtraFieldRow(ListItem<ExtraEntry> item) {
+        ExtraEntry entry = item.getModelObject();
+        item.add(new Label("extraFieldLabel", entry.displayName));
+
+        WebMarkupContainer textDiv = new WebMarkupContainer("extraTextDiv");
+        textDiv.setVisible(entry.type == ExtraEntry.Type.TEXT);
+        textDiv.add(new TextField<>("extraFieldValue", new PropertyModel<>(entry, "value")));
+        item.add(textDiv);
+
+        WebMarkupContainer enumDiv = new WebMarkupContainer("extraEnumDiv");
+        enumDiv.setVisible(entry.type == ExtraEntry.Type.ENUM);
+        enumDiv.add(new DropDownChoice<>("extraFieldEnum",
+                new PropertyModel<>(entry, "value"),
+                entry.options != null ? entry.options : List.of()));
+        item.add(enumDiv);
+    }
+
+    // ── Template helpers ──────────────────────────────────────────────────────
+
+    private static FixMessageTemplate findTemplate(String msgType) {
+        TemplateService ts = templateSvc();
+        if (ts == null) return null;
+        return ts.findAll().stream()
+                .filter(t -> msgType.equals(t.msgType()))
+                .findFirst().orElse(null);
+    }
+
+    private static List<ExtraEntry> loadExtraFields(FixMessageTemplate tmpl) {
+        List<ExtraEntry> extras = new ArrayList<>();
+        if (tmpl == null) return extras;
+        for (FieldSpec spec : tmpl.fields()) {
+            if (STANDARD_TAGS.contains(spec.tag())) continue;
+            if (spec.value() instanceof FieldValue.UserInput ui) {
+                String label = ui.name() + "  (tag " + spec.tag() + ")";
+                extras.add(ExtraEntry.text(ui.name(), label, ui.defaultValue()));
+            } else if (spec.value() instanceof FieldValue.Enumeration en) {
+                String label = en.name() + "  (tag " + spec.tag() + ")";
+                extras.add(ExtraEntry.enumeration(en.name(), label, en.options(), en.defaultOption()));
+            }
+        }
+        return extras;
+    }
+
+    private static Map<String, String> buildNewOverrides(NewOrderModel model) {
+        Map<String, String> overrides = new HashMap<>();
+        if (!blank(model.symbol))      overrides.put("symbol",      model.symbol);
+        if (!blank(model.side))        overrides.put("side",        sideCode(model.side));
+        if (model.quantity != null)    overrides.put("quantity",    model.quantity.toPlainString());
+        if (model.price != null)       overrides.put("price",       model.price.toPlainString());
+        if (!blank(model.ordType))     overrides.put("ordType",     ordTypeCode(model.ordType));
+        if (!blank(model.timeInForce)) overrides.put("timeInForce", tifCode(model.timeInForce));
+        for (ExtraEntry e : model.extraFields) {
+            if (!blank(e.value)) overrides.put(e.name, e.value);
+        }
+        return overrides;
+    }
+
+    private static Map<String, String> buildAmendOverrides(AmendModel model) {
+        Map<String, String> overrides = new HashMap<>();
+        if (!blank(model.origClOrdId))  overrides.put("origClOrdId",  model.origClOrdId);
+        if (!blank(model.symbol))       overrides.put("symbol",       model.symbol);
+        if (!blank(model.side))         overrides.put("side",         sideCode(model.side));
+        if (model.quantity != null)     overrides.put("quantity",     model.quantity.toPlainString());
+        if (model.price != null)        overrides.put("price",        model.price.toPlainString());
+        if (!blank(model.ordType))      overrides.put("ordType",      ordTypeCode(model.ordType));
+        if (!blank(model.timeInForce))  overrides.put("timeInForce",  tifCode(model.timeInForce));
+        for (ExtraEntry e : model.extraFields) {
+            if (!blank(e.value)) overrides.put(e.name, e.value);
+        }
+        return overrides;
+    }
+
+    // ── Service lookups ───────────────────────────────────────────────────────
 
     private static OrderService orderSvc() {
         return ((FixSimulatorApplication) Application.get()).getOrderService();
+    }
+
+    private static TemplateService templateSvc() {
+        return ((FixSimulatorApplication) Application.get()).getTemplateService();
     }
 
     // ── Display helpers ───────────────────────────────────────────────────────
@@ -355,7 +544,11 @@ public class OrdersPage extends BasePage {
         return (value == null || value.isBlank()) ? "—" : value;
     }
 
-    // ── FIX code mapping (for New Order submission) ───────────────────────────
+    private static boolean blank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    // ── FIX code mapping ──────────────────────────────────────────────────────
 
     private static String sideCode(String side) {
         return "SELL".equals(side) ? "2" : "1";
@@ -385,7 +578,7 @@ public class OrdersPage extends BasePage {
         private static final long serialVersionUID = 1L;
         String filterClOrdId    = "";
         String filterSymbol     = "";
-        String filterSide;        // null = all
+        String filterSide;
         String filterOrdType;
         String filterTimeInForce;
         String filterStatus;
@@ -393,18 +586,68 @@ public class OrdersPage extends BasePage {
 
     static class NewOrderModel implements Serializable {
         private static final long serialVersionUID = 1L;
-        String symbol      = "";
-        String side        = "BUY";
-        BigDecimal quantity = BigDecimal.valueOf(100);
+        String     templateId;
+        String     symbol      = "";
+        String     side        = "BUY";
+        BigDecimal quantity    = BigDecimal.valueOf(100);
         BigDecimal price;
-        String ordType     = "Limit";
-        String timeInForce = "Day";
-        String text        = "";
+        String     ordType     = "Limit";
+        String     timeInForce = "Day";
+        List<ExtraEntry> extraFields = new ArrayList<>();
 
         void reset() {
             symbol = ""; side = "BUY";
             quantity = BigDecimal.valueOf(100); price = null;
-            ordType = "Limit"; timeInForce = "Day"; text = "";
+            ordType = "Limit"; timeInForce = "Day";
+            extraFields.forEach(e -> e.value = e.defaultValue != null ? e.defaultValue : "");
         }
+    }
+
+    static class AmendModel implements Serializable {
+        private static final long serialVersionUID = 1L;
+        String     templateId;
+        String     origClOrdId;
+        String     symbol      = "";
+        String     side        = "BUY";
+        BigDecimal quantity;
+        BigDecimal price;
+        String     ordType     = "Limit";
+        String     timeInForce = "Day";
+        List<ExtraEntry> extraFields = new ArrayList<>();
+    }
+
+    static class ExtraEntry implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        enum Type { TEXT, ENUM }
+
+        final String name;
+        final String displayName;
+        final Type   type;
+        String       value;
+        final String defaultValue;
+        final List<String> options;
+
+        private ExtraEntry(String name, String displayName, Type type,
+                           String defaultValue, List<String> options) {
+            this.name         = name;
+            this.displayName  = displayName;
+            this.type         = type;
+            this.defaultValue = defaultValue;
+            this.value        = defaultValue != null ? defaultValue : "";
+            this.options      = options != null ? options : List.of();
+        }
+
+        static ExtraEntry text(String name, String displayName, String defaultValue) {
+            return new ExtraEntry(name, displayName, Type.TEXT, defaultValue, null);
+        }
+
+        static ExtraEntry enumeration(String name, String displayName,
+                                      List<String> options, String defaultOption) {
+            return new ExtraEntry(name, displayName, Type.ENUM, defaultOption, options);
+        }
+
+        public String getValue()        { return value; }
+        public void setValue(String v)  { value = v; }
     }
 }

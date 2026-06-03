@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.template;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -33,6 +34,16 @@ public record FieldSpec(int tag, FieldValue value) implements Serializable {
     /** Convenience: per-request user-input spec with default. */
     public static FieldSpec userInput(int tag, String name, String defaultValue) {
         return new FieldSpec(tag, new FieldValue.UserInput(name, defaultValue));
+    }
+
+    /** Convenience: enumeration spec (no pre-selected default). */
+    public static FieldSpec enumeration(int tag, String name, List<String> options) {
+        return new FieldSpec(tag, new FieldValue.Enumeration(name, options, null));
+    }
+
+    /** Convenience: enumeration spec with a pre-selected default. */
+    public static FieldSpec enumeration(int tag, String name, List<String> options, String defaultOption) {
+        return new FieldSpec(tag, new FieldValue.Enumeration(name, options, defaultOption));
     }
 
     /** Convenience: placeholder spec. */

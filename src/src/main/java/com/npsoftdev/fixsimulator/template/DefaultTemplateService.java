@@ -89,9 +89,15 @@ public class DefaultTemplateService implements TemplateService {
 
     @Override
     public List<FixMessageTemplate> findVisibleTo(String sessionId) {
+        if (sessionId == null) return List.of();
         SessionID sid = sessionIDs.get(sessionId);
         if (sid == null) return List.of();
         return repository.findVisibleTo(sid);
+    }
+
+    @Override
+    public List<FixMessageTemplate> findAll() {
+        return repository.findAll();
     }
 
     @Override

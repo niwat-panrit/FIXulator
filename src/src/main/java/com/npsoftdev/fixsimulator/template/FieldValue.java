@@ -19,7 +19,7 @@ import java.util.Objects;
  * this file (and the builder).</p>
  */
 public sealed interface FieldValue extends Serializable
-        permits FieldValue.Literal, FieldValue.UserInput,
+        permits FieldValue.Literal, FieldValue.UserInput, FieldValue.Enumeration,
                 FieldValue.Placeholder, FieldValue.Derived {
 
     /** Constant value embedded directly in the template. */
@@ -38,6 +38,27 @@ public sealed interface FieldValue extends Serializable
         private static final long serialVersionUID = 1L;
         public UserInput { Objects.requireNonNull(name, "name"); }
         public UserInput(String name) { this(name, null); }
+    }
+
+    /**
+     * Value selected at send-time by the user from a fixed list of options.
+     *
+     * <p>The send dialog renders this field as a dropdown. The selected option is
+     * passed to the builder via the overrides map, keyed by {@link #name()}.</p>
+     *
+     * @param name          override key (e.g. {@code "side"})
+     * @param options       ordered list of allowed FIX values (e.g. {@code ["1","2"]})
+     * @param defaultOption pre-selected value; may be {@code null}
+     */
+    record Enumeration(String name, java.util.List<String> options, String defaultOption)
+            implements FieldValue {
+        private static final long serialVersionUID = 1L;
+
+        public Enumeration {
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(options, "options");
+            options = java.util.List.copyOf(options);
+        }
     }
 
     /** Value generated at send-time by the placeholder resolver. */
