@@ -1,0 +1,262 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:panel>
+
+<script>
+function updateFieldInputs(selectEl) {
+    var row = selectEl.closest('tr');
+    if (!row) return;
+    row.querySelectorAll('[data-for-type]').forEach(function(d) { d.style.display = 'none'; });
+    var target = row.querySelector('[data-for-type="' + selectEl.value + '"]');
+    if (target) target.style.display = '';
+}
+function initFieldInputs() {
+    document.querySelectorAll('.field-type-select').forEach(function(sel) {
+        updateFieldInputs(sel);
+    });
+}
+document.addEventListener('DOMContentLoaded', initFieldInputs);
+</script>
+
+<form wicket:id="form">
+
+    <!-- Validation feedback -->
+    <div wicket:id="feedback" class="mb-3"></div>
+
+    <!-- ── Template Metadata ──────────────────────────────────────────────── -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="bi bi-info-circle me-2 text-primary"></i>Template Metadata
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold" style="font-size:0.82rem;">
+                        Template ID <span class="text-muted">(auto-generated)</span>
+                    </label>
+                    <div class="font-monospace text-muted"
+                         style="font-size:0.75rem; word-break:break-all;"
+                         wicket:id="idDisplay"></div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">
+                        Name <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" wicket:id="name"
+                           class="form-control form-control-sm"
+                           placeholder="e.g. New Order Single — AAPL"/>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        MsgType <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" wicket:id="msgType"
+                           class="form-control form-control-sm font-monospace"
+                           placeholder="e.g. D, G, F"/>
+                    <div class="form-text">FIX MsgType field value (tag 35).</div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        BeginString <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" wicket:id="beginString"
+                           class="form-control form-control-sm font-monospace"
+                           placeholder="FIX.4.4"/>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Description</label>
+                    <input type="text" wicket:id="description"
+                           class="form-control form-control-sm"
+                           placeholder="Optional description"/>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Scope</label>
+                    <select wicket:id="scopeType"
+                            class="form-select form-select-sm"></select>
+                </div>
+
+                <div class="col-md-9">
+                    <label class="form-label fw-semibold">
+                        Session ID
+                        <span class="text-muted" style="font-weight:400;font-size:0.8rem;">
+                            (required when Scope = Session)
+                        </span>
+                    </label>
+                    <input type="text" wicket:id="scopeSessionId"
+                           class="form-control form-control-sm font-monospace"
+                           placeholder="e.g. FIX.4.4:SIMULATOR->EXCHANGE"/>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Field Specs ────────────────────────────────────────────────────── -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="bi bi-list-ul me-2 text-primary"></i>Field Specs
+            </h6>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-muted" style="font-size:0.78rem;">
+                    Tip: use <code>$(order_id)</code>, <code>$(timestamp)</code> etc.
+                    in Literal values for dynamic tokens.
+                </span>
+                <button wicket:id="addFieldBtn" type="button"
+                        class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-plus me-1"></i>Add Field
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+
+            <div wicket:id="fieldsContainer">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover mb-0"
+                           style="font-size:0.82rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:80px;">Tag</th>
+                                <th style="width:140px;">Type</th>
+                                <th>Value / Config</th>
+                                <th style="width:44px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+
+                            <tr wicket:id="emptyFieldsRow">
+                                <td colspan="4" class="text-center text-muted py-4">
+                                    <i class="bi bi-plus-circle me-1"></i>
+                                    No fields yet — click <strong>Add Field</strong> to add one.
+                                </td>
+                            </tr>
+
+                            <tr wicket:id="fieldRows" class="align-middle">
+
+                                <!-- Tag number -->
+                                <td>
+                                    <input type="number" wicket:id="tag"
+                                           class="form-control form-control-sm font-monospace"
+                                           min="1" placeholder="tag"/>
+                                </td>
+
+                                <!-- Value type selector -->
+                                <td>
+                                    <select wicket:id="valueType"
+                                            class="form-select form-select-sm field-type-select"
+                                            onchange="updateFieldInputs(this)"></select>
+                                </td>
+
+                                <!-- Type-specific inputs (only one shown at a time via JS) -->
+                                <td>
+
+                                    <!-- Literal -->
+                                    <div data-for-type="Literal">
+                                        <input type="text" wicket:id="literalValue"
+                                               class="form-control form-control-sm font-monospace"
+                                               placeholder='fixed value or $(token_name)'/>
+                                    </div>
+
+                                    <!-- UserInput -->
+                                    <div data-for-type="UserInput" style="display:none;">
+                                        <div class="row g-1">
+                                            <div class="col-6">
+                                                <input type="text" wicket:id="uiName"
+                                                       class="form-control form-control-sm"
+                                                       placeholder="input name (e.g. symbol)"/>
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="text" wicket:id="uiDefault"
+                                                       class="form-control form-control-sm"
+                                                       placeholder="default value (optional)"/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Enumeration -->
+                                    <div data-for-type="Enumeration" style="display:none;">
+                                        <div class="row g-1">
+                                            <div class="col-3">
+                                                <input type="text" wicket:id="enumName"
+                                                       class="form-control form-control-sm"
+                                                       placeholder="field name"/>
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="text" wicket:id="enumOptions"
+                                                       class="form-control form-control-sm font-monospace"
+                                                       placeholder="1, 2, 3  (comma-separated values)"/>
+                                            </div>
+                                            <div class="col-3">
+                                                <input type="text" wicket:id="enumDefault"
+                                                       class="form-control form-control-sm font-monospace"
+                                                       placeholder="default"/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Placeholder -->
+                                    <div data-for-type="Placeholder" style="display:none;">
+                                        <select wicket:id="placeholderType"
+                                                class="form-select form-select-sm font-monospace"></select>
+                                    </div>
+
+                                    <!-- Derived -->
+                                    <div data-for-type="Derived" style="display:none;">
+                                        <div class="row g-1">
+                                            <div class="col-4">
+                                                <input type="number" wicket:id="derivedSourceTag"
+                                                       class="form-control form-control-sm font-monospace"
+                                                       placeholder="source tag"/>
+                                            </div>
+                                            <div class="col-8">
+                                                <input type="text" wicket:id="derivedMappingName"
+                                                       class="form-control form-control-sm"
+                                                       placeholder="mapping name (e.g. symbol-to-isin)"/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </td>
+
+                                <!-- Remove row -->
+                                <td class="text-center">
+                                    <button wicket:id="removeFieldBtn" type="button"
+                                            class="btn btn-sm btn-outline-danger py-0 px-1">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </td>
+
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ── Action buttons ─────────────────────────────────────────────────── -->
+    <div class="d-flex justify-content-end gap-2 pb-3">
+        <a wicket:id="cancelBtn"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-x-circle me-1"></i>Cancel
+        </a>
+        <button wicket:id="saveBtn" type="submit"
+                class="btn btn-sm btn-primary">
+            <i class="bi bi-check-circle me-1"></i>Save Template
+        </button>
+    </div>
+
+</form>
+
+</wicket:panel>
+</body>
+</html>

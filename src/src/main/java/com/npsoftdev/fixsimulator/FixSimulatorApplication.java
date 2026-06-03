@@ -5,6 +5,7 @@ import com.npsoftdev.fixsimulator.pages.DynamicValuesPage;
 import com.npsoftdev.fixsimulator.pages.HomePage;
 import com.npsoftdev.fixsimulator.pages.MessageLogPage;
 import com.npsoftdev.fixsimulator.pages.OrdersPage;
+import com.npsoftdev.fixsimulator.pages.FixMessageTemplateFormPage;
 import com.npsoftdev.fixsimulator.pages.FixMessageTemplatesPage;
 import com.npsoftdev.fixsimulator.pages.RawMessagesPage;
 import com.npsoftdev.fixsimulator.pages.SystemLogsPage;
@@ -87,6 +88,8 @@ public class FixSimulatorApplication extends WebApplication {
         pluginRegistry.getPlugins().stream()
                 .filter(p -> p.getPageClass() != null)
                 .forEach(p -> mountPage("/" + p.getId(), p.getPageClass()));
+
+        mountPage("/fix-message-templates/form", FixMessageTemplateFormPage.class);
     }
 
     // ── Service accessors ─────────────────────────────────────────────────────

@@ -1,0 +1,24 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+<!-- Page Header -->
+<div class="page-header">
+    <h4>
+        <a href="javascript:history.back()"
+           class="text-decoration-none text-muted me-2"
+           style="font-size:0.9em;" title="Back to FIX Message Templates">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <i class="bi bi-layout-text-window-reverse me-2 text-primary"></i>FIX Message Templates
+        <span class="text-muted mx-2" style="font-weight:400;">/</span>
+        <span wicket:id="pageAction" style="font-size:0.85em; font-weight:400;"></span>
+    </h4>
+</div>
+
+<!-- Form panel — contains all create/edit form logic -->
+<div wicket:id="templateFormPanel"></div>
+
+</wicket:extend>
+</body>
+</html>
