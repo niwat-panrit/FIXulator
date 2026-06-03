@@ -2,22 +2,6 @@
 <body>
 <wicket:panel>
 
-<script>
-function updateFieldInputs(selectEl) {
-    var row = selectEl.closest('tr');
-    if (!row) return;
-    row.querySelectorAll('[data-for-type]').forEach(function(d) { d.style.display = 'none'; });
-    var target = row.querySelector('[data-for-type="' + selectEl.value + '"]');
-    if (target) target.style.display = '';
-}
-function initFieldInputs() {
-    document.querySelectorAll('.field-type-select').forEach(function(sel) {
-        updateFieldInputs(sel);
-    });
-}
-document.addEventListener('DOMContentLoaded', initFieldInputs);
-</script>
-
 <form wicket:id="form">
 
     <!-- Validation feedback -->
@@ -163,8 +147,7 @@ document.addEventListener('DOMContentLoaded', initFieldInputs);
                                 <!-- Value type selector -->
                                 <td>
                                     <select wicket:id="valueType"
-                                            class="form-select form-select-sm field-type-select"
-                                            onchange="updateFieldInputs(this)"></select>
+                                            class="form-select form-select-sm field-type-select"></select>
                                 </td>
 
                                 <!-- Type-specific inputs (only one shown at a time via JS) -->

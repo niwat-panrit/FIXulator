@@ -10,11 +10,14 @@ import com.npsoftdev.fixsimulator.template.TemplateService;
 import org.apache.wicket.Application;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.markup.html.form.AjaxButton;
+import org.apache.wicket.markup.head.IHeaderResponse;
+import org.apache.wicket.markup.head.JavaScriptHeaderItem;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.Button;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
+import org.apache.wicket.markup.html.form.IChoiceRenderer;
 import org.apache.wicket.markup.html.form.NumberTextField;
 import org.apache.wicket.markup.html.form.TextField;
 import org.apache.wicket.markup.html.link.BookmarkablePageLink;
@@ -25,6 +28,7 @@ import org.apache.wicket.markup.html.panel.Panel;
 import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.PropertyModel;
+import org.apache.wicket.request.resource.PackageResourceReference;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -50,6 +54,20 @@ public class TemplateFormPanel extends Panel {
             List.of("Literal", "UserInput", "Enumeration", "Placeholder", "Derived");
     static final List<String> PLACEHOLDER_TYPES =
             Arrays.stream(PlaceholderType.values()).map(Enum::name).toList();
+
+    /** Renders String choices using the string itself as the HTML option value. */
+    private static final IChoiceRenderer<String> STRING_VALUE_RENDERER = new IChoiceRenderer<>() {
+        @Override public Object getDisplayValue(String o) { return o; }
+        @Override public String getIdValue(String o, int index) { return o; }
+        @Override public String getObject(String id, IModel<? extends List<? extends String>> choices) { return id; }
+    };
+
+    @Override
+    public void renderHead(IHeaderResponse response) {
+        super.renderHead(response);
+        response.render(JavaScriptHeaderItem.forReference(
+                new PackageResourceReference(TemplateFormPanel.class, "TemplateFormPanel.js")));
+    }
 
     public TemplateFormPanel(String id, String templateId) {
         super(id);
@@ -103,7 +121,8 @@ public class TemplateFormPanel extends Panel {
                 item.add(new NumberTextField<>("tag",
                         new PropertyModel<>(row, "tag"), Integer.class));
                 item.add(new DropDownChoice<>("valueType",
-                        new PropertyModel<>(row, "valueType"), VALUE_TYPES));
+                        new PropertyModel<>(row, "valueType"), VALUE_TYPES,
+                        STRING_VALUE_RENDERER));
 
                 // Literal
                 item.add(new TextField<>("literalValue",
