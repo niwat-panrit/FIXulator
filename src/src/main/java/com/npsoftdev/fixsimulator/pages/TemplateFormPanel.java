@@ -77,6 +77,8 @@ public class TemplateFormPanel extends Panel {
         form.add(new TextField<String>("description"));
         form.add(new TextField<String>("beginString").setRequired(true));
         form.add(new TextField<String>("msgType").setRequired(true));
+        form.add(new NumberTextField<>("priority", new PropertyModel<>(formModel, "priority"), Integer.class)
+                .setMinimum(1).setRequired(true));
         form.add(new DropDownChoice<>("scopeType", List.of("Global", "Session")));
         form.add(new TextField<String>("scopeSessionId"));
 
@@ -189,7 +191,8 @@ public class TemplateFormPanel extends Panel {
                         .description(formModel.description != null ? formModel.description.trim() : "")
                         .beginString(formModel.beginString.trim())
                         .msgType(formModel.msgType.trim())
-                        .scope(scope);
+                        .scope(scope)
+                        .priority(formModel.priority > 0 ? formModel.priority : 100);
 
                 for (FieldFormRow row : formModel.fields) {
                     if (row.tag <= 0) continue;
@@ -267,6 +270,7 @@ public class TemplateFormPanel extends Panel {
         String description = "";
         String beginString = "FIX.4.4";
         String msgType = "";
+        int priority = 100;
         String scopeType = "Global";
         String scopeSessionId = "";
         List<FieldFormRow> fields = new ArrayList<>();
@@ -277,6 +281,7 @@ public class TemplateFormPanel extends Panel {
             description = t.description();
             beginString = t.beginString();
             msgType = t.msgType();
+            priority = t.priority();
             if (t.scope() instanceof TemplateScope.Session s) {
                 scopeType = "Session";
                 scopeSessionId = s.sessionId();
@@ -325,6 +330,8 @@ public class TemplateFormPanel extends Panel {
         public void setBeginString(String v)   { beginString = v; }
         public String getMsgType()             { return msgType; }
         public void setMsgType(String v)       { msgType = v; }
+        public int getPriority()               { return priority; }
+        public void setPriority(int v)         { priority = v; }
         public String getScopeType()           { return scopeType; }
         public void setScopeType(String v)     { scopeType = v; }
         public String getScopeSessionId()      { return scopeSessionId; }

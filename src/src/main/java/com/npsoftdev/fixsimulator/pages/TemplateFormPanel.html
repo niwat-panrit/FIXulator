@@ -70,11 +70,23 @@ document.addEventListener('DOMContentLoaded', initFieldInputs);
                            placeholder="FIX.4.4"/>
                 </div>
 
-                <div class="col-12">
+                <div class="col-md-9">
                     <label class="form-label fw-semibold">Description</label>
                     <input type="text" wicket:id="description"
                            class="form-control form-control-sm"
                            placeholder="Optional description"/>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        Priority <span class="text-danger">*</span>
+                    </label>
+                    <input type="number" wicket:id="priority"
+                           class="form-control form-control-sm"
+                           min="1" placeholder="100"/>
+                    <div class="form-text">
+                        Lower = selected first. Default: 100.
+                    </div>
                 </div>
 
                 <div class="col-md-3">

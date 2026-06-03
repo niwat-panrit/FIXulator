@@ -68,6 +68,7 @@ public class FixMessageTemplatesPage extends BasePage {
                                 ? "badge bg-secondary" : "badge bg-info text-dark"));
                 item.add(scopeLabel);
 
+                item.add(new Label("tPriority", String.valueOf(t.priority())));
                 item.add(new Label("tFieldCount", String.valueOf(t.fields().size())));
                 item.add(new Label("tDescription", t.description()));
 

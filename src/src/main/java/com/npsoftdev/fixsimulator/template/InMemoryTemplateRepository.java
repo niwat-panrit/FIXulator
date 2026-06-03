@@ -35,9 +35,11 @@ public class InMemoryTemplateRepository implements TemplateRepository {
 
     @Override
     public List<FixMessageTemplate> findAll() {
-        // Stable ordering: by id for predictable UI rendering.
+        // Stable ordering: by priority ascending (lower number = higher priority),
+        // then by name alphabetically for predictable UI rendering.
         List<FixMessageTemplate> all = new ArrayList<>(byId.values());
-        all.sort(Comparator.comparing(FixMessageTemplate::id));
+        all.sort(Comparator.comparingInt(FixMessageTemplate::priority)
+                           .thenComparing(FixMessageTemplate::name));
         return all;
     }
 

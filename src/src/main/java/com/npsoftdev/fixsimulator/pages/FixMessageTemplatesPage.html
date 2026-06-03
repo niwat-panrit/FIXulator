@@ -19,6 +19,7 @@
                     <th>Name</th>
                     <th>MsgType</th>
                     <th>Scope</th>
+                    <th class="text-center" title="Lower number = selected first when multiple templates share the same MsgType">Priority</th>
                     <th class="text-center">Fields</th>
                     <th>Description</th>
                     <th>Actions</th>
@@ -27,7 +28,7 @@
             <tbody wicket:id="tableBody">
 
                 <tr wicket:id="emptyRow">
-                    <td colspan="6" class="text-center text-muted py-4">
+                    <td colspan="7" class="text-center text-muted py-4">
                         <i class="bi bi-inbox me-1"></i>
                         No templates yet — click <strong>New Template</strong> to create one.
                     </td>
@@ -44,6 +45,10 @@
                     </td>
                     <td><span class="badge bg-secondary font-monospace" wicket:id="tMsgType"></span></td>
                     <td><span wicket:id="tScope" class="badge"></span></td>
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark border font-monospace"
+                              wicket:id="tPriority"></span>
+                    </td>
                     <td class="text-center">
                         <span class="badge bg-light text-dark border" wicket:id="tFieldCount"></span>
                     </td>

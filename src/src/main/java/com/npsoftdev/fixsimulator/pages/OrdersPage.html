@@ -134,9 +134,13 @@
 
     <!-- ══════════════════════════════════════════════════════════════
          NEW ORDER MODAL
+         The <form> wraps both modal-body and modal-footer, which breaks
+         Bootstrap's scrollable-modal flex chain. Fix: ditch modal-dialog-scrollable
+         and put an explicit inner scrollable div inside modal-body instead.
+         max-height = 100vh − modal-margins(56px) − header(60px) − footer(68px) − buffer(16px)
          ══════════════════════════════════════════════════════════ -->
-    <div class="modal fade" id="newOrderModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal fade" id="newOrderModal" tabindex="-1" style="padding-left:10px; padding-right:10px;">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -145,95 +149,97 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form wicket:id="newOrderForm">
-                    <div class="modal-body">
+                    <div class="modal-body p-0">
+                        <div style="overflow-y:auto; max-height:calc(100vh - 200px); padding:1rem;">
 
-                        <div wicket:id="feedback" class="mb-2"></div>
+                            <div wicket:id="feedback" class="mb-2"></div>
 
-                        <!-- Standard fields -->
-                        <div class="row g-3 mb-3">
+                            <!-- Standard fields -->
+                            <div class="row g-3 mb-3">
 
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Symbol <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" wicket:id="symbol"
-                                       class="form-control form-control-sm font-monospace"
-                                       placeholder="e.g. AAPL"/>
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Symbol <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" wicket:id="symbol"
+                                           class="form-control form-control-sm font-monospace"
+                                           placeholder="e.g. AAPL"/>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Side <span class="text-danger">*</span>
+                                    </label>
+                                    <select wicket:id="side" class="form-select form-select-sm"></select>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Quantity <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" wicket:id="quantity"
+                                           class="form-control form-control-sm" min="1"/>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">Price</label>
+                                    <input type="number" step="0.0001" wicket:id="price"
+                                           class="form-control form-control-sm" placeholder="0.0000"/>
+                                    <div class="form-text">Leave blank for Market orders.</div>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Order Type <span class="text-danger">*</span>
+                                    </label>
+                                    <select wicket:id="ordType" class="form-select form-select-sm"></select>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Time In Force <span class="text-danger">*</span>
+                                    </label>
+                                    <select wicket:id="timeInForce" class="form-select form-select-sm"></select>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Cl.Ord ID</label>
+                                    <input type="text" class="form-control form-control-sm bg-light text-muted"
+                                           value="(auto-generated)" readonly/>
+                                    <div class="form-text">Assigned automatically by the FIX engine.</div>
+                                </div>
+
                             </div>
 
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Side <span class="text-danger">*</span>
-                                </label>
-                                <select wicket:id="side" class="form-select form-select-sm"></select>
-                            </div>
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Quantity <span class="text-danger">*</span>
-                                </label>
-                                <input type="number" wicket:id="quantity"
-                                       class="form-control form-control-sm" min="1"/>
-                            </div>
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">Price</label>
-                                <input type="number" step="0.0001" wicket:id="price"
-                                       class="form-control form-control-sm" placeholder="0.0000"/>
-                                <div class="form-text">Leave blank for Market orders.</div>
-                            </div>
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Order Type <span class="text-danger">*</span>
-                                </label>
-                                <select wicket:id="ordType" class="form-select form-select-sm"></select>
-                            </div>
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Time In Force <span class="text-danger">*</span>
-                                </label>
-                                <select wicket:id="timeInForce" class="form-select form-select-sm"></select>
-                            </div>
-
-                            <div class="col-12">
-                                <label class="form-label fw-semibold">Cl.Ord ID</label>
-                                <input type="text" class="form-control form-control-sm bg-light text-muted"
-                                       value="(auto-generated)" readonly/>
-                                <div class="form-text">Assigned automatically by the FIX engine.</div>
-                            </div>
-
-                        </div>
-
-                        <!-- Additional fields from template -->
-                        <div wicket:id="newOrderExtraSection">
-                            <hr class="my-2"/>
-                            <h6 class="fw-semibold text-secondary mb-2" style="font-size:0.82rem;">
-                                <i class="bi bi-list-ul me-1"></i>Additional Fields
-                            </h6>
-                            <div wicket:id="newOrderExtraRows">
-                                <div class="row g-2 align-items-center mb-2">
-                                    <div class="col-5">
-                                        <label class="form-label fw-semibold mb-0"
-                                               style="font-size:0.82rem;"
-                                               wicket:id="extraFieldLabel">Field</label>
-                                    </div>
-                                    <div class="col-7">
-                                        <div wicket:id="extraTextDiv">
-                                            <input type="text" wicket:id="extraFieldValue"
-                                                   class="form-control form-control-sm font-monospace"/>
+                            <!-- Additional fields from template -->
+                            <div wicket:id="newOrderExtraSection">
+                                <hr class="my-2"/>
+                                <h6 class="fw-semibold text-secondary mb-2" style="font-size:0.82rem;">
+                                    <i class="bi bi-list-ul me-1"></i>Additional Fields
+                                </h6>
+                                <div wicket:id="newOrderExtraRows">
+                                    <div class="row g-2 align-items-center mb-2">
+                                        <div class="col-5">
+                                            <label class="form-label fw-semibold mb-0"
+                                                   style="font-size:0.82rem;"
+                                                   wicket:id="extraFieldLabel">Field</label>
                                         </div>
-                                        <div wicket:id="extraEnumDiv">
-                                            <select wicket:id="extraFieldEnum"
-                                                    class="form-select form-select-sm font-monospace"></select>
+                                        <div class="col-7">
+                                            <div wicket:id="extraTextDiv">
+                                                <input type="text" wicket:id="extraFieldValue"
+                                                       class="form-control form-control-sm font-monospace"/>
+                                            </div>
+                                            <div wicket:id="extraEnumDiv">
+                                                <select wicket:id="extraFieldEnum"
+                                                        class="form-select form-select-sm font-monospace"></select>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                    </div>
+                        </div><!-- /inner scrollable -->
+                    </div><!-- /modal-body -->
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary btn-sm"
                                 data-bs-dismiss="modal">Cancel</button>
@@ -249,8 +255,8 @@
     <!-- ══════════════════════════════════════════════════════════════
          AMEND ORDER MODAL
          ══════════════════════════════════════════════════════════ -->
-    <div class="modal fade" id="amendOrderModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal fade" id="amendOrderModal" tabindex="-1" style="padding-left:10px; padding-right:10px;">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -259,101 +265,103 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form wicket:id="amendOrderForm">
-                    <div class="modal-body">
+                    <div class="modal-body p-0">
+                        <div style="overflow-y:auto; max-height:calc(100vh - 200px); padding:1rem;">
 
-                        <div wicket:id="amendFeedback" class="mb-2"></div>
+                            <div wicket:id="amendFeedback" class="mb-2"></div>
 
-                        <!-- OrigClOrdID info strip -->
-                        <div class="mb-3 p-2 rounded border bg-light" style="font-size:0.82rem;">
-                            <span class="text-muted">Amending order: </span>
-                            <span class="font-monospace fw-semibold"
-                                  wicket:id="origClOrdIdDisplay"></span>
-                        </div>
-
-                        <!-- Standard fields -->
-                        <div class="row g-3 mb-3">
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Symbol <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" wicket:id="symbol"
-                                       class="form-control form-control-sm font-monospace"
-                                       placeholder="e.g. AAPL"/>
+                            <!-- OrigClOrdID info strip -->
+                            <div class="mb-3 p-2 rounded border bg-light" style="font-size:0.82rem;">
+                                <span class="text-muted">Amending order: </span>
+                                <span class="font-monospace fw-semibold"
+                                      wicket:id="origClOrdIdDisplay"></span>
                             </div>
 
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Side <span class="text-danger">*</span>
-                                </label>
-                                <select wicket:id="side" class="form-select form-select-sm"></select>
+                            <!-- Standard fields -->
+                            <div class="row g-3 mb-3">
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Symbol <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" wicket:id="symbol"
+                                           class="form-control form-control-sm font-monospace"
+                                           placeholder="e.g. AAPL"/>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Side <span class="text-danger">*</span>
+                                    </label>
+                                    <select wicket:id="side" class="form-select form-select-sm"></select>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Quantity <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" wicket:id="quantity"
+                                           class="form-control form-control-sm" min="1"/>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">Price</label>
+                                    <input type="number" step="0.0001" wicket:id="price"
+                                           class="form-control form-control-sm" placeholder="0.0000"/>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Order Type <span class="text-danger">*</span>
+                                    </label>
+                                    <select wicket:id="ordType" class="form-select form-select-sm"></select>
+                                </div>
+
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold">
+                                        Time In Force <span class="text-danger">*</span>
+                                    </label>
+                                    <select wicket:id="timeInForce" class="form-select form-select-sm"></select>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">New Cl.Ord ID</label>
+                                    <input type="text" class="form-control form-control-sm bg-light text-muted"
+                                           value="(auto-generated)" readonly/>
+                                    <div class="form-text">New ClOrdID assigned automatically by the FIX engine.</div>
+                                </div>
+
                             </div>
 
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Quantity <span class="text-danger">*</span>
-                                </label>
-                                <input type="number" wicket:id="quantity"
-                                       class="form-control form-control-sm" min="1"/>
-                            </div>
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">Price</label>
-                                <input type="number" step="0.0001" wicket:id="price"
-                                       class="form-control form-control-sm" placeholder="0.0000"/>
-                            </div>
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Order Type <span class="text-danger">*</span>
-                                </label>
-                                <select wicket:id="ordType" class="form-select form-select-sm"></select>
-                            </div>
-
-                            <div class="col-6">
-                                <label class="form-label fw-semibold">
-                                    Time In Force <span class="text-danger">*</span>
-                                </label>
-                                <select wicket:id="timeInForce" class="form-select form-select-sm"></select>
-                            </div>
-
-                            <div class="col-12">
-                                <label class="form-label fw-semibold">New Cl.Ord ID</label>
-                                <input type="text" class="form-control form-control-sm bg-light text-muted"
-                                       value="(auto-generated)" readonly/>
-                                <div class="form-text">New ClOrdID assigned automatically by the FIX engine.</div>
-                            </div>
-
-                        </div>
-
-                        <!-- Additional fields from template -->
-                        <div wicket:id="amendExtraSection">
-                            <hr class="my-2"/>
-                            <h6 class="fw-semibold text-secondary mb-2" style="font-size:0.82rem;">
-                                <i class="bi bi-list-ul me-1"></i>Additional Fields
-                            </h6>
-                            <div wicket:id="amendExtraRows">
-                                <div class="row g-2 align-items-center mb-2">
-                                    <div class="col-5">
-                                        <label class="form-label fw-semibold mb-0"
-                                               style="font-size:0.82rem;"
-                                               wicket:id="extraFieldLabel">Field</label>
-                                    </div>
-                                    <div class="col-7">
-                                        <div wicket:id="extraTextDiv">
-                                            <input type="text" wicket:id="extraFieldValue"
-                                                   class="form-control form-control-sm font-monospace"/>
+                            <!-- Additional fields from template -->
+                            <div wicket:id="amendExtraSection">
+                                <hr class="my-2"/>
+                                <h6 class="fw-semibold text-secondary mb-2" style="font-size:0.82rem;">
+                                    <i class="bi bi-list-ul me-1"></i>Additional Fields
+                                </h6>
+                                <div wicket:id="amendExtraRows">
+                                    <div class="row g-2 align-items-center mb-2">
+                                        <div class="col-5">
+                                            <label class="form-label fw-semibold mb-0"
+                                                   style="font-size:0.82rem;"
+                                                   wicket:id="extraFieldLabel">Field</label>
                                         </div>
-                                        <div wicket:id="extraEnumDiv">
-                                            <select wicket:id="extraFieldEnum"
-                                                    class="form-select form-select-sm font-monospace"></select>
+                                        <div class="col-7">
+                                            <div wicket:id="extraTextDiv">
+                                                <input type="text" wicket:id="extraFieldValue"
+                                                       class="form-control form-control-sm font-monospace"/>
+                                            </div>
+                                            <div wicket:id="extraEnumDiv">
+                                                <select wicket:id="extraFieldEnum"
+                                                        class="form-select form-select-sm font-monospace"></select>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                    </div>
+                        </div><!-- /inner scrollable -->
+                    </div><!-- /modal-body -->
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary btn-sm"
                                 data-bs-dismiss="modal">Cancel</button>
