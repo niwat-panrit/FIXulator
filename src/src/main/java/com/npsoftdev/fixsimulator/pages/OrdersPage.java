@@ -132,11 +132,15 @@ public class OrdersPage extends BasePage {
                         "badge " + statusBadgeClass(ordStatus)));
                 item.add(statusLabel);
 
-                item.add(new Label("cumQty",   o.getOrDefault(14, "0")));
-                item.add(new Label("avgPx",    nvl(o.get(6))));
-                item.add(new Label("sendTime", formatSendTime(o.getOrDefault(60, ""))));
+                item.add(new Label("cumQty",    o.getOrDefault(14, "0")));
+                item.add(new Label("leavesQty", o.getOrDefault(151, "—")));
+                item.add(new Label("avgPx",     nvl(o.get(6))));
+                item.add(new Label("sendTime",  formatSendTime(o.getOrDefault(60, ""))));
 
-                // ── Amend button — pre-populates and opens the amend modal ────
+                // Row-level CSS to convey order state at a glance
+                item.add(AttributeModifier.replace("class", rowClass(ordStatus)));
+
+                // ── Amend button ───────────────────────────────────────────────
                 item.add(new AjaxLink<Void>("amendBtn") {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
@@ -157,7 +161,7 @@ public class OrdersPage extends BasePage {
                     }
                 });
 
-                // ── Cancel button ─────────────────────────────────────────────
+                // ── Cancel button ──────────────────────────────────────────────
                 item.add(new AjaxLink<Void>("cancelBtn") {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
@@ -194,7 +198,9 @@ public class OrdersPage extends BasePage {
         addDropFilter(filterForm, "filterTimeInForce",
                 List.of("Day", "GTC", "IOC", "FOK"), tableBody);
         addDropFilter(filterForm, "filterStatus",
-                List.of("New", "PartFilled", "Filled", "Cancelled", "Rejected", "Pending"), tableBody);
+                List.of("New", "PartFilled", "Filled", "DoneForDay", "Cancelled",
+                        "Stopped", "Rejected", "Suspended", "Expired",
+                        "PendCxl", "PendReplace", "PendingNew"), tableBody);
 
         add(filterForm);
         add(buildNewOrderForm(newOrderModel));
@@ -516,21 +522,51 @@ public class OrdersPage extends BasePage {
             case "0" -> "New";
             case "1" -> "PartFilled";
             case "2" -> "Filled";
+            case "3" -> "DoneForDay";
             case "4" -> "Cancelled";
+            case "5" -> "Replaced";
+            case "6" -> "PendCxl";
+            case "7" -> "Stopped";
             case "8" -> "Rejected";
-            case "A" -> "Pending";
+            case "9" -> "Suspended";
+            case "A" -> "PendingNew";
+            case "C" -> "Expired";
+            case "E" -> "PendReplace";
             default  -> blank(code) ? "Sent" : code;
         };
     }
 
     private static String statusBadgeClass(String code) {
         return switch (code) {
-            case "0" -> "bg-primary";
-            case "1" -> "bg-warning text-dark";
-            case "2" -> "bg-success";
-            case "4" -> "bg-secondary";
-            case "8" -> "bg-danger";
-            default  -> "bg-info text-dark";
+            case "0" -> "bg-primary";           // New — blue
+            case "1" -> "bg-warning text-dark"; // PartFilled — amber
+            case "2" -> "bg-success";           // Filled — green
+            case "3" -> "bg-secondary";         // DoneForDay — grey
+            case "4" -> "bg-secondary";         // Cancelled — grey
+            case "5" -> "bg-info text-dark";    // Replaced — teal
+            case "6" -> "bg-warning text-dark"; // PendCxl — amber
+            case "7" -> "bg-secondary";         // Stopped — grey
+            case "8" -> "bg-danger";            // Rejected — red
+            case "9" -> "bg-secondary";         // Suspended — grey
+            case "A" -> "bg-info text-dark";    // PendingNew — teal
+            case "C" -> "bg-secondary";         // Expired — grey
+            case "E" -> "bg-warning text-dark"; // PendReplace — amber
+            default  -> "bg-light text-dark border";
+        };
+    }
+
+    /**
+     * Returns a Bootstrap table-row class that colours the row by lifecycle state.
+     */
+    private static String rowClass(String ordStatus) {
+        return switch (ordStatus) {
+            case "2"      -> "table-success";          // Filled
+            case "3", "C" -> "table-secondary";        // DoneForDay / Expired
+            case "4"      -> "table-secondary";        // Cancelled
+            case "8"      -> "table-danger";           // Rejected
+            case "1"      -> "table-warning";          // PartFilled
+            case "6", "E" -> "table-info";             // PendCxl / PendReplace
+            default       -> "";
         };
     }
 

@@ -50,10 +50,52 @@ class GatewayOrderServiceTest {
     }
 
     @Test
-    void onOutboundMessage_orderCancelRequest_isRecorded() {
-        service.onOutboundMessage(SID, outboundOrder("CXL001", MsgType.ORDER_CANCEL_REQUEST));
+    void onOutboundMessage_orderCancelRequest_setsPendingCancelOnExistingOrder() {
+        // Record the original order first
+        Message original = outboundOrderWithOrig("ORD001", null, MsgType.ORDER_SINGLE);
+        service.onOutboundMessage(SID, original);
 
+        // Send a cancel for it
+        Message cancel = outboundOrderWithOrig("CXL001", "ORD001", MsgType.ORDER_CANCEL_REQUEST);
+        service.onOutboundMessage(SID, cancel);
+
+        // Still exactly ONE row (no new row added)
         assertEquals(1, service.listOrders(SID.toString()).size());
+        // OrdStatus = 6 (PendingCancel)
+        assertEquals("6", service.listOrders(SID.toString()).get(0).get(OrdStatus.FIELD));
+    }
+
+    @Test
+    void onOutboundMessage_orderCancelRequest_forUnknownOrder_isNoOp() {
+        // Cancel for an order we never sent — no new row, no exception
+        Message cancel = outboundOrderWithOrig("CXL001", "GHOST", MsgType.ORDER_CANCEL_REQUEST);
+        assertDoesNotThrow(() -> service.onOutboundMessage(SID, cancel));
+        assertTrue(service.listOrders(SID.toString()).isEmpty());
+    }
+
+    @Test
+    void onOutboundMessage_orderCancelReplaceRequest_updatesFieldsAndRekeys() {
+        // Record original order
+        Message original = outboundOrderWithOrig("ORD001", null, MsgType.ORDER_SINGLE);
+        original.setString(Symbol.FIELD, "AAPL");
+        service.onOutboundMessage(SID, original);
+
+        // Send replace with new ClOrdID
+        Message replace = outboundOrderWithOrig("REP001", "ORD001",
+                MsgType.ORDER_CANCEL_REPLACE_REQUEST);
+        replace.setString(Price.FIELD,    "155.00");
+        replace.setString(OrderQty.FIELD, "200");
+        service.onOutboundMessage(SID, replace);
+
+        // Still exactly ONE row
+        assertEquals(1, service.listOrders(SID.toString()).size());
+        Map<Integer, String> order = service.listOrders(SID.toString()).get(0);
+
+        // ClOrdID re-keyed to new value, status = PendingReplace
+        assertEquals("REP001", order.get(ClOrdID.FIELD));
+        assertEquals("E",      order.get(OrdStatus.FIELD));
+        assertEquals("155.00", order.get(Price.FIELD));
+        assertEquals("200",    order.get(OrderQty.FIELD));
     }
 
     @Test
@@ -119,6 +161,68 @@ class GatewayOrderServiceTest {
         msg.getHeader().setString(MsgType.FIELD, MsgType.EXECUTION_REPORT);
         // ClOrdID deliberately omitted
         assertDoesNotThrow(() -> service.onInboundMessage(SID, msg));
+    }
+
+    @Test
+    void onInboundMessage_executionReport_updatesExecutionFields() {
+        service.onOutboundMessage(SID, outboundOrder("ORD001", MsgType.ORDER_SINGLE));
+
+        Message er = executionReport("ORD001", OrdStatus.PARTIALLY_FILLED);
+        er.setString(CumQty.FIELD,   "50");
+        er.setString(LeavesQty.FIELD, "50");
+        er.setString(AvgPx.FIELD,    "150.00");
+        er.setString(LastPx.FIELD,   "150.00");
+        er.setString(LastQty.FIELD,  "50");
+        service.onInboundMessage(SID, er);
+
+        Map<Integer, String> order = service.listOrders(SID.toString()).get(0);
+        assertEquals("50",     order.get(CumQty.FIELD));
+        assertEquals("50",     order.get(LeavesQty.FIELD));
+        assertEquals("150.00", order.get(AvgPx.FIELD));
+        assertEquals("150.00", order.get(LastPx.FIELD));
+        assertEquals("50",     order.get(LastQty.FIELD));
+    }
+
+    @Test
+    void onInboundMessage_replacedExecType_syncsPriceAndQty() {
+        service.onOutboundMessage(SID, outboundOrder("ORD001", MsgType.ORDER_SINGLE));
+
+        // Simulate PendingReplace in-flight
+        Message replace = outboundOrderWithOrig("REP001", "ORD001",
+                MsgType.ORDER_CANCEL_REPLACE_REQUEST);
+        replace.setString(Price.FIELD,    "160.00");
+        replace.setString(OrderQty.FIELD, "300");
+        service.onOutboundMessage(SID, replace);
+
+        // ExecType=5 (Replaced) execution report arrives on new ClOrdID
+        Message er = executionReportWithExecType("REP001", OrdStatus.NEW, ExecType.REPLACED);
+        er.setString(Price.FIELD,    "160.00");
+        er.setString(OrderQty.FIELD, "300");
+        service.onInboundMessage(SID, er);
+
+        Map<Integer, String> order = service.listOrders(SID.toString()).get(0);
+        assertEquals("160.00", order.get(Price.FIELD));
+        assertEquals("300",    order.get(OrderQty.FIELD));
+    }
+
+    @Test
+    void onInboundMessage_orderCancelReject_restoresOrdStatus() {
+        service.onOutboundMessage(SID, outboundOrder("ORD001", MsgType.ORDER_SINGLE));
+
+        // Simulate PendingCancel
+        Message cancel = outboundOrderWithOrig("CXL001", "ORD001", MsgType.ORDER_CANCEL_REQUEST);
+        service.onOutboundMessage(SID, cancel);
+        assertEquals("6", service.listOrders(SID.toString()).get(0).get(OrdStatus.FIELD));
+
+        // Cancel rejected — exchange restores status to New
+        Message reject = new Message();
+        reject.getHeader().setString(MsgType.FIELD, MsgType.ORDER_CANCEL_REJECT);
+        reject.setString(ClOrdID.FIELD,  "CXL001");
+        reject.setChar(OrdStatus.FIELD,  OrdStatus.NEW);
+        service.onInboundMessage(SID, reject);
+
+        assertEquals(String.valueOf(OrdStatus.NEW),
+                service.listOrders(SID.toString()).get(0).get(OrdStatus.FIELD));
     }
 
     // ── sendNewOrder ──────────────────────────────────────────────────────────
@@ -234,19 +338,31 @@ class GatewayOrderServiceTest {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static Message outboundOrder(String clOrdId, String msgType) {
+        return outboundOrderWithOrig(clOrdId, null, msgType);
+    }
+
+    private static Message outboundOrderWithOrig(String clOrdId, String origClOrdId,
+                                                  String msgType) {
         Message msg = new Message();
         msg.getHeader().setString(MsgType.FIELD, msgType);
         msg.setString(ClOrdID.FIELD, clOrdId);
-        msg.setString(Symbol.FIELD,  "AAPL");
-        msg.setString(Side.FIELD,    "1");
+        if (origClOrdId != null) msg.setString(OrigClOrdID.FIELD, origClOrdId);
+        msg.setString(Symbol.FIELD, "AAPL");
+        msg.setString(Side.FIELD,   "1");
         return msg;
     }
 
     private static Message executionReport(String clOrdId, char ordStatus) {
+        return executionReportWithExecType(clOrdId, ordStatus, ExecType.NEW);
+    }
+
+    private static Message executionReportWithExecType(String clOrdId, char ordStatus,
+                                                        char execType) {
         Message msg = new Message();
         msg.getHeader().setString(MsgType.FIELD, MsgType.EXECUTION_REPORT);
         msg.setString(ClOrdID.FIELD,  clOrdId);
         msg.setChar(OrdStatus.FIELD,  ordStatus);
+        msg.setChar(ExecType.FIELD,   execType);
         return msg;
     }
 }
