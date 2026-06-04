@@ -1,0 +1,186 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+<!-- Page Header -->
+<div class="page-header">
+    <h4><i class="bi bi-table me-2 text-primary"></i>Value Mappings</h4>
+</div>
+
+<p class="text-muted mb-4" style="font-size:0.87rem;">
+    Manage named key→value lookup tables used by <strong>Derived</strong> field specs in order
+    templates. For example, the built-in <code>symbol-to-isin</code> mapping translates a ticker
+    symbol (tag&nbsp;55) into its ISIN (tag&nbsp;48) at send time.
+</p>
+
+<!-- ── MAPPING TABLES ─────────────────────────────────────────────────────── -->
+<div class="table-card mb-4" wicket:id="mappingListContainer">
+
+    <div class="d-flex align-items-center gap-2 px-3 pt-3 pb-2">
+        <h6 class="fw-semibold mb-0">
+            <i class="bi bi-stack me-2 text-secondary"></i>Mapping Tables
+        </h6>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead>
+                <tr class="table-dark">
+                    <th>Name</th>
+                    <th style="width:100px;" class="text-center">Entries</th>
+                    <th style="width:140px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <tr wicket:id="emptyMappingsRow">
+                    <td colspan="3" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox me-1"></i>No mapping tables yet — create one below.
+                    </td>
+                </tr>
+
+                <tr wicket:id="mappingRows">
+                    <td class="font-monospace fw-semibold" wicket:id="mappingName"></td>
+                    <td class="text-center text-muted" style="font-size:0.82rem;" wicket:id="entryCount"></td>
+                    <td class="text-end pe-3">
+                        <a wicket:id="viewBtn"
+                           class="btn btn-sm btn-outline-primary py-0 px-2 me-1"
+                           title="View entries">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
+                        <span wicket:id="activeBadge"
+                              class="badge bg-primary me-1">Viewing</span>
+                        <a wicket:id="deleteMappingBtn"
+                           class="btn btn-sm btn-outline-danger py-0 px-2"
+                           title="Delete mapping">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <!-- New mapping form -->
+    <div class="px-3 pt-2 pb-3 border-top mt-2">
+        <form wicket:id="newMappingForm">
+            <div wicket:id="newMappingFeedback" class="mb-2"></div>
+            <div class="d-flex gap-2 align-items-end">
+                <div>
+                    <label class="form-label fw-semibold mb-1" style="font-size:0.83rem;">
+                        New Mapping Name
+                    </label>
+                    <input type="text" wicket:id="newMappingName"
+                           class="form-control form-control-sm font-monospace"
+                           style="width:240px;"
+                           placeholder="e.g. cusip-lookup"/>
+                    <div class="form-text">Lowercase letters, numbers, hyphens, underscores.</div>
+                </div>
+                <button wicket:id="createMappingBtn" class="btn btn-sm btn-success mb-4">
+                    <i class="bi bi-plus me-1"></i>Create
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+
+<!-- ── ENTRIES ────────────────────────────────────────────────────────────── -->
+<div class="table-card mb-4" wicket:id="entriesContainer">
+
+    <div class="d-flex align-items-center gap-2 px-3 pt-3 pb-2">
+        <h6 class="fw-semibold mb-0">
+            <i class="bi bi-list-ul me-2 text-secondary"></i>Entries —
+            <span class="font-monospace text-primary" wicket:id="activeNameLabel">symbol-to-isin</span>
+        </h6>
+    </div>
+
+    <!-- shown when no mapping is selected -->
+    <div wicket:id="noMappingMsg" class="px-3 pb-3 text-muted" style="font-size:0.87rem;">
+        <i class="bi bi-arrow-up me-1"></i>Select a mapping table above to view and manage its entries.
+    </div>
+
+    <!-- shown when a mapping is selected -->
+    <div wicket:id="entriesSection">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr class="table-dark">
+                        <th style="width:200px;">Key</th>
+                        <th>Value</th>
+                        <th style="width:80px;"></th>
+                    </tr>
+                </thead>
+                <tbody wicket:id="entriesTableBody">
+
+                    <tr wicket:id="emptyEntriesRow">
+                        <td colspan="3" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox me-1"></i>No entries yet — add one below.
+                        </td>
+                    </tr>
+
+                    <tr wicket:id="entryRows">
+                        <td class="font-monospace fw-semibold" wicket:id="entryKey"></td>
+                        <td class="font-monospace text-secondary" wicket:id="entryValue"></td>
+                        <td class="text-end pe-3">
+                            <a wicket:id="editEntryBtn"
+                               class="btn btn-sm btn-outline-secondary py-0 px-2 me-1"
+                               title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a wicket:id="deleteEntryBtn"
+                               class="btn btn-sm btn-outline-danger py-0 px-2"
+                               title="Remove">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── ADD / EDIT ENTRY FORM ──────────────────────────────────────────────── -->
+<div class="table-card" id="entryFormCard">
+    <form wicket:id="entryForm" class="px-3 pb-3">
+        <div class="pt-3 pb-2">
+            <h6 class="fw-semibold mb-0">
+                <i class="bi bi-plus-circle me-2 text-secondary"></i>
+                <span wicket:id="entryFormTitle">Add Entry</span>
+            </h6>
+        </div>
+        <div wicket:id="entryFeedback" class="mb-3"></div>
+        <div class="row g-3 align-items-end">
+
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Key <span class="text-danger">*</span></label>
+                <input type="text" wicket:id="key"
+                       class="form-control form-control-sm font-monospace"
+                       placeholder="e.g. AAPL"/>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Value <span class="text-danger">*</span></label>
+                <input type="text" wicket:id="value"
+                       class="form-control form-control-sm font-monospace"
+                       placeholder="e.g. US0378331005"/>
+            </div>
+
+            <div class="col-md-auto d-flex gap-2">
+                <button wicket:id="saveEntryBtn" class="btn btn-sm btn-primary">
+                    <wicket:container wicket:id="saveEntryBtnLabel">Add</wicket:container>
+                </button>
+                <a wicket:id="cancelEntryBtn" class="btn btn-sm btn-outline-secondary">Cancel</a>
+            </div>
+
+        </div>
+    </form>
+</div>
+
+</wicket:extend>
+</body>
+</html>

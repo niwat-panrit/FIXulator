@@ -2,6 +2,7 @@ package com.npsoftdev.fixsimulator;
 
 import com.npsoftdev.fixsimulator.pages.ConnectionManagementPage;
 import com.npsoftdev.fixsimulator.pages.DynamicValuesPage;
+import com.npsoftdev.fixsimulator.pages.ValueMappingsPage;
 import com.npsoftdev.fixsimulator.pages.HomePage;
 import com.npsoftdev.fixsimulator.pages.MessageLogPage;
 import com.npsoftdev.fixsimulator.pages.OrdersPage;
@@ -164,6 +165,9 @@ public class FixSimulatorApplication extends WebApplication {
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "dynamic-values", "Dynamic Values", "bi-braces",
                 NavSection.ADMIN, DynamicValuesPage.class));
+        pluginRegistry.register(new DefaultFixGatewayPlugin(
+                "value-mappings", "Value Mappings", "bi-table",
+                NavSection.ADMIN, ValueMappingsPage.class));
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "users", "User Management", "bi-people",
                 NavSection.ADMIN, UserManagementPage.class));

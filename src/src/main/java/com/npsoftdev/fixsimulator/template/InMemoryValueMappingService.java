@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.template;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -47,6 +48,22 @@ public class InMemoryValueMappingService implements ValueMappingService {
     @Override
     public Set<String> mappingNames() {
         return Collections.unmodifiableSet(tables.keySet());
+    }
+
+    @Override
+    public Map<String, String> entries(String mappingName) {
+        Map<String, String> table = tables.get(mappingName);
+        return table != null ? Collections.unmodifiableMap(new HashMap<>(table)) : Collections.emptyMap();
+    }
+
+    @Override
+    public void createMapping(String mappingName) {
+        tables.computeIfAbsent(mappingName, k -> new ConcurrentHashMap<>());
+    }
+
+    @Override
+    public void deleteMapping(String mappingName) {
+        tables.remove(mappingName);
     }
 
     /**

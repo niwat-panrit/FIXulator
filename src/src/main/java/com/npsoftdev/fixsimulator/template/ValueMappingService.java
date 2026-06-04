@@ -28,4 +28,13 @@ public interface ValueMappingService extends Serializable {
 
     /** Returns the set of known mapping names. */
     Set<String> mappingNames();
+
+    /** Returns all key→value pairs in {@code mappingName}, or an empty map if the table is absent. */
+    java.util.Map<String, String> entries(String mappingName);
+
+    /** Creates an empty mapping table if it does not already exist. */
+    void createMapping(String mappingName);
+
+    /** Removes the entire mapping table and all its entries. No-op if absent. */
+    void deleteMapping(String mappingName);
 }
