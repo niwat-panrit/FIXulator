@@ -10,6 +10,35 @@
     </a>
 </div>
 
+<!-- ── CREATE FROM FIX MESSAGE ──────────────────────────────────────────── -->
+<div class="table-card mb-4">
+    <div class="d-flex align-items-center gap-2 px-3 pt-3 pb-2">
+        <h6 class="fw-semibold mb-0">
+            <i class="bi bi-file-earmark-arrow-up me-2 text-secondary"></i>
+            Create Template from FIX Message
+        </h6>
+    </div>
+    <p class="px-3 text-muted mb-2" style="font-size:0.83rem;">
+        Paste a raw FIX message below. All fields will be parsed as
+        <strong>Literal</strong> values — you can adjust individual field types on the next
+        screen before saving. Accepts SOH-delimited (byte 0x01) or pipe-delimited
+        (<code>tag=value|tag=value</code>) formats.
+    </p>
+    <form wicket:id="parseForm" class="px-3 pb-3">
+        <div wicket:id="parseFeedback" class="mb-2"></div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Raw FIX Message</label>
+            <textarea wicket:id="rawFixMessage"
+                      class="form-control form-control-sm font-monospace"
+                      rows="3"
+                      placeholder="8=FIX.4.4|9=148|35=D|49=CLIENT|56=BROKER|34=1|52=20240101-10:00:00.000|11=ORD001|55=AAPL|54=1|38=100|44=150.00|40=2|59=0|10=123|"></textarea>
+        </div>
+        <button wicket:id="parseBtn" class="btn btn-sm btn-primary">
+            <i class="bi bi-magic me-1"></i>Create Template from FIX Message
+        </button>
+    </form>
+</div>
+
 <!-- Templates Table -->
 <div class="table-card">
     <div class="table-responsive">

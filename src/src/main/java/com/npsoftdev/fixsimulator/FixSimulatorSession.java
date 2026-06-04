@@ -14,6 +14,13 @@ public class FixSimulatorSession extends WebSession {
     /** Session ID string of the connection the user has selected as active. May be {@code null}. */
     private String activeSessionId;
 
+    /**
+     * Transient raw FIX message string set by the template-list page when the user
+     * requests "Create Template from FIX Message".  Consumed (and cleared) by the
+     * form page on its first load so it is never re-used across navigations.
+     */
+    private String pendingFixMessage;
+
     public FixSimulatorSession(Request request) {
         super(request);
     }
@@ -27,6 +34,23 @@ public class FixSimulatorSession extends WebSession {
     public void setActiveSessionId(String sessionId) {
         this.activeSessionId = sessionId;
         dirty();
+    }
+
+    /** Stores a raw FIX message to be parsed into a template on the next page load. */
+    public void setPendingFixMessage(String raw) {
+        this.pendingFixMessage = raw;
+        dirty();
+    }
+
+    /**
+     * Returns and clears the pending FIX message.
+     * Returns {@code null} if no message is waiting.
+     */
+    public String takePendingFixMessage() {
+        String v = pendingFixMessage;
+        pendingFixMessage = null;
+        dirty();
+        return v;
     }
 
     /** Convenience accessor so components can call {@code FixSimulatorSession.get()} without casting. */

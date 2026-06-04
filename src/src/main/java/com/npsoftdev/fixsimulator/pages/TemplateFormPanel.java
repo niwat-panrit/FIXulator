@@ -33,6 +33,7 @@ import org.apache.wicket.request.resource.PackageResourceReference;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -69,17 +70,21 @@ public class TemplateFormPanel extends Panel {
                 new PackageResourceReference(TemplateFormPanel.class, "TemplateFormPanel.js")));
     }
 
+    /** Creates the panel in create mode (blank form) or edit mode (pre-populated from templateId). */
     public TemplateFormPanel(String id, String templateId) {
+        this(id, buildModel(templateId, null));
+    }
+
+    /**
+     * Creates the panel pre-populated by parsing {@code rawFixMessage}.
+     * All fields default to {@code Literal}; the user can adjust types before saving.
+     */
+    public TemplateFormPanel(String id, String templateId, String rawFixMessage) {
+        this(id, buildModel(templateId, rawFixMessage));
+    }
+
+    private TemplateFormPanel(String id, TemplateFormModel formModel) {
         super(id);
-
-        TemplateFormModel formModel = new TemplateFormModel();
-
-        if (templateId != null) {
-            TemplateService ts = templateSvc();
-            if (ts != null) {
-                ts.findById(templateId).ifPresent(formModel::loadFrom);
-            }
-        }
 
         Form<TemplateFormModel> form = new Form<>("form",
                 new CompoundPropertyModel<>(formModel));
@@ -265,6 +270,72 @@ public class TemplateFormPanel extends Panel {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static TemplateFormModel buildModel(String templateId, String rawFixMessage) {
+        TemplateFormModel model = new TemplateFormModel();
+        if (templateId != null) {
+            TemplateService ts = templateSvc();
+            if (ts != null) ts.findById(templateId).ifPresent(model::loadFrom);
+        } else if (rawFixMessage != null && !rawFixMessage.isBlank()) {
+            parseFixMessage(rawFixMessage, model);
+        }
+        return model;
+    }
+
+    /**
+     * Parses a raw FIX message string into a {@link TemplateFormModel}.
+     *
+     * <p>Accepts common display formats: fields delimited by SOH (0x01), pipe {@code |},
+     * or newlines. Tag 8 (BeginString) and tag 35 (MsgType) populate the template
+     * metadata fields. Tags 9 (BodyLength) and 10 (CheckSum) are skipped because they
+     * are auto-calculated. All remaining tags become {@code Literal} field rows.
+     */
+    static void parseFixMessage(String raw, TemplateFormModel model) {
+        if (raw == null || raw.isBlank()) return;
+
+        // Normalize all common delimiters to a single pipe
+        String normalized = raw
+                .replace('\u0001', '|')          // SOH → pipe
+                .replaceAll("[\r\n]+", "|")       // newlines → pipe
+                .replaceAll("[ \t]*\\|[ \t]*", "|") // strip surrounding whitespace
+                .replaceAll("\\|{2,}", "|")        // collapse repeated pipes
+                .trim();
+        if (normalized.startsWith("|")) normalized = normalized.substring(1);
+        if (normalized.endsWith("|"))   normalized = normalized.substring(0, normalized.length() - 1);
+
+        List<FieldFormRow> fields = new ArrayList<>();
+        for (String part : normalized.split("\\|")) {
+            part = part.trim();
+            if (part.isEmpty()) continue;
+            int eq = part.indexOf('=');
+            if (eq <= 0) continue;
+
+            String tagStr = part.substring(0, eq).trim();
+            String value  = part.substring(eq + 1);
+            int tag;
+            try {
+                tag = Integer.parseInt(tagStr);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+
+            switch (tag) {
+                case 8  -> model.beginString = value;   // BeginString
+                case 35 -> model.msgType     = value;   // MsgType
+                case 9, 10 -> { /* BodyLength / CheckSum — skip */ }
+                default -> {
+                    FieldFormRow row = new FieldFormRow();
+                    row.tag          = tag;
+                    row.valueType    = "Literal";
+                    row.literalValue = value;
+                    fields.add(row);
+                }
+            }
+        }
+
+        fields.sort(Comparator.comparingInt(r -> r.tag));
+        model.fields = fields;
+    }
 
     static TemplateService templateSvc() {
         return ((FixSimulatorApplication) Application.get()).getTemplateService();

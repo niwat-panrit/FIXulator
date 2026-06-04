@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.pages;
 
 import com.npsoftdev.fixsimulator.FixSimulatorApplication;
+import com.npsoftdev.fixsimulator.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.template.FixMessageTemplate;
 import com.npsoftdev.fixsimulator.template.TemplateScope;
 import com.npsoftdev.fixsimulator.template.TemplateService;
@@ -12,12 +13,18 @@ import org.apache.wicket.ajax.attributes.AjaxRequestAttributes;
 import org.apache.wicket.ajax.markup.html.AjaxLink;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
+import org.apache.wicket.markup.html.form.Button;
+import org.apache.wicket.markup.html.form.Form;
+import org.apache.wicket.markup.html.form.TextArea;
 import org.apache.wicket.markup.html.link.BookmarkablePageLink;
 import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.ListView;
+import org.apache.wicket.markup.html.panel.FeedbackPanel;
+import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.request.mapper.parameter.PageParameters;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
@@ -31,6 +38,40 @@ public class FixMessageTemplatesPage extends BasePage {
 
     public FixMessageTemplatesPage() {
         super();
+
+        // ── Parse-from-FIX-message form ───────────────────────────────────────
+        ParseFormModel parseModel = new ParseFormModel();
+        Form<ParseFormModel> parseForm = new Form<>("parseForm",
+                new CompoundPropertyModel<>(parseModel));
+        parseForm.setOutputMarkupId(true);
+
+        FeedbackPanel parseFeedback = new FeedbackPanel("parseFeedback");
+        parseFeedback.setOutputMarkupId(true);
+        parseForm.add(parseFeedback);
+        parseForm.add(new TextArea<String>("rawFixMessage"));
+
+        parseForm.add(new Button("parseBtn") {
+            @Override
+            public void onSubmit() {
+                String raw = parseModel.rawFixMessage;
+                if (raw == null || raw.isBlank()) {
+                    error("Please paste a FIX message.");
+                    return;
+                }
+                // Light validation: must contain tag 35
+                TemplateFormPanel.TemplateFormModel preview = new TemplateFormPanel.TemplateFormModel();
+                TemplateFormPanel.parseFixMessage(raw.trim(), preview);
+                if (preview.msgType == null || preview.msgType.isBlank()) {
+                    error("Could not find MsgType (tag 35) — please check the message format.");
+                    return;
+                }
+                FixSimulatorSession.get().setPendingFixMessage(raw.trim());
+                setResponsePage(FixMessageTemplateFormPage.class,
+                        new PageParameters().add("fromParsed", "true"));
+            }
+        });
+
+        add(parseForm);
 
         // ── Templates table ───────────────────────────────────────────────────
         WebMarkupContainer tableBody = new WebMarkupContainer("tableBody");
@@ -131,5 +172,12 @@ public class FixMessageTemplatesPage extends BasePage {
 
     private static TemplateService templateSvc() {
         return ((FixSimulatorApplication) Application.get()).getTemplateService();
+    }
+
+    static class ParseFormModel implements Serializable {
+        private static final long serialVersionUID = 1L;
+        String rawFixMessage = "";
+        public String getRawFixMessage()          { return rawFixMessage; }
+        public void   setRawFixMessage(String v)  { rawFixMessage = v; }
     }
 }
