@@ -4,11 +4,10 @@ import com.npsoftdev.fixsimulator.pages.ConnectionManagementPage;
 import com.npsoftdev.fixsimulator.pages.DynamicValuesPage;
 import com.npsoftdev.fixsimulator.pages.ValueMappingsPage;
 import com.npsoftdev.fixsimulator.pages.HomePage;
-import com.npsoftdev.fixsimulator.pages.MessageLogPage;
+import com.npsoftdev.fixsimulator.pages.FixActivityPage;
 import com.npsoftdev.fixsimulator.pages.OrdersPage;
 import com.npsoftdev.fixsimulator.pages.FixMessageTemplateFormPage;
 import com.npsoftdev.fixsimulator.pages.FixMessageTemplatesPage;
-import com.npsoftdev.fixsimulator.pages.RawMessagesPage;
 import com.npsoftdev.fixsimulator.pages.SystemLogsPage;
 import com.npsoftdev.fixsimulator.pages.TradesPage;
 import com.npsoftdev.fixsimulator.pages.UserManagementPage;
@@ -151,11 +150,8 @@ public class FixSimulatorApplication extends WebApplication {
                 "trades", "Trades", "bi-arrow-left-right",
                 NavSection.MONITORING, TradesPage.class));
         pluginRegistry.register(new DefaultFixGatewayPlugin(
-                "raw-messages", "Raw FIX Messages", "bi-terminal",
-                NavSection.MONITORING, RawMessagesPage.class));
-        pluginRegistry.register(new DefaultFixGatewayPlugin(
-                "message-log", "Message Log", "bi-journal-text",
-                NavSection.MONITORING, MessageLogPage.class));
+                "fix-activity", "FIX Activity", "bi-activity",
+                NavSection.MONITORING, FixActivityPage.class));
 
         // ── Administration ────────────────────────────────────────────────────
         pluginRegistry.register(gateway);           // registered after order-manager for nav order

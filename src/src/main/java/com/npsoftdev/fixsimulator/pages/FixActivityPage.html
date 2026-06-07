@@ -1,0 +1,252 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:extend>
+
+    <div class="page-header">
+        <h4><i class="bi bi-activity me-2 text-primary"></i>FIX Activity</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-primary" type="button"
+                    data-bs-toggle="offcanvas" data-bs-target="#composeOffcanvas"
+                    aria-controls="composeOffcanvas">
+                <i class="bi bi-pencil-square me-1"></i>Compose Message
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" type="button">
+                <i class="bi bi-download me-1"></i>Export
+            </button>
+            <a wicket:id="clearLogBtn" href="#" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash me-1"></i>Clear Log
+            </a>
+        </div>
+    </div>
+
+    <!-- ── Filters ──────────────────────────────────────────────────────────── -->
+    <div class="table-card mb-3">
+        <div class="p-3">
+            <form wicket:id="filterForm" onsubmit="return false;">
+                <div class="row g-2 align-items-center">
+                    <div class="col-auto">
+                        <label class="form-label mb-1" style="font-size:0.8rem;">Direction</label>
+                        <select wicket:id="direction" class="form-select form-select-sm"
+                                style="width:130px;"></select>
+                    </div>
+                    <div class="col-auto d-flex align-items-center gap-2" style="padding-top:1.4rem;">
+                        <input type="checkbox" wicket:id="hideHeartbeats"
+                               class="form-check-input" id="hideHbCb" style="cursor:pointer;"/>
+                        <label class="form-check-label" for="hideHbCb"
+                               style="font-size:0.8rem; cursor:pointer; user-select:none;">
+                            Hide Heartbeats
+                        </label>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Activity Table ───────────────────────────────────────────────────── -->
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:100px;">Time</th>
+                        <th style="width:80px;">Dir</th>
+                        <th style="width:130px;">Connection</th>
+                        <th style="width:46px;">Seq</th>
+                        <th style="width:185px;">Type</th>
+                        <th style="width:90px;">Sender</th>
+                        <th style="width:90px;">Target</th>
+                        <th>Summary / App Activity</th>
+                        <th style="width:55px;"></th>
+                    </tr>
+                </thead>
+                <tbody wicket:id="tableBody">
+
+                    <tr wicket:id="emptyRow">
+                        <td colspan="9" class="text-center text-muted py-4" style="font-size:0.85rem;">
+                            <i class="bi bi-inbox me-2"></i>No FIX messages for this session yet
+                        </td>
+                    </tr>
+
+                    <tr wicket:id="activityRows">
+                        <td class="text-muted font-monospace" style="font-size:0.79rem;">
+                            <span wicket:id="time"></span>
+                        </td>
+                        <td>
+                            <span wicket:id="dirLabel"></span>
+                        </td>
+                        <td style="font-size:0.8rem;">
+                            <span wicket:id="connection"></span>
+                        </td>
+                        <td class="text-muted font-monospace" style="font-size:0.8rem;">
+                            <span wicket:id="seqNum"></span>
+                        </td>
+                        <td>
+                            <span wicket:id="fixTypeBadge">
+                                <span wicket:id="typeBadge"
+                                      class="badge bg-light text-dark border font-monospace me-1"></span><span
+                                      wicket:id="typeName" style="font-size:0.8rem;"></span>
+                            </span>
+                            <span wicket:id="appTypeBadge">
+                                <span wicket:id="appTypeName"
+                                      class="badge bg-light text-muted border"
+                                      style="font-size:0.72rem;"></span>
+                            </span>
+                        </td>
+                        <td class="font-monospace" style="font-size:0.78rem;">
+                            <span wicket:id="sender"></span>
+                        </td>
+                        <td class="font-monospace" style="font-size:0.78rem;">
+                            <span wicket:id="target"></span>
+                        </td>
+                        <td style="font-size:0.82rem;">
+                            <i wicket:id="appIcon"></i><span wicket:id="summaryText"></span>
+                        </td>
+                        <td>
+                            <a wicket:id="viewBtn" href="#"
+                               data-bs-toggle="modal" data-bs-target="#msgDetailModal"
+                               class="btn btn-xs border"
+                               style="font-size:0.74rem; padding:1px 8px;">View</a>
+                        </td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination footer -->
+        <div wicket:id="pagingFooter"
+             class="d-flex justify-content-between align-items-center px-3 py-2 border-top"
+             style="font-size:0.8rem; color:#6b7280;">
+            <span wicket:id="summary"></span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li wicket:id="prevItem">
+                        <a wicket:id="prevPage" class="page-link" href="#">&#8592;</a>
+                    </li>
+                    <li wicket:id="nextItem">
+                        <a wicket:id="nextPage" class="page-link" href="#">&#8594;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- ── Message Detail Modal ──────────────────────────────────────────────── -->
+    <div class="modal fade" id="msgDetailModal" tabindex="-1"
+         aria-labelledby="msgDetailLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title" id="msgDetailLabel">
+                        <i class="bi bi-card-text me-2 text-primary"></i>Message Detail
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" style="font-size:0.8rem;">
+                            Raw FIX Message
+                        </label>
+                        <textarea id="modalRawMsg"
+                                  class="form-control form-control-sm font-monospace"
+                                  rows="4"
+                                  style="font-size:0.74rem; resize:none; background:#f8f9fa;"
+                                  readonly></textarea>
+                    </div>
+                    <label class="form-label fw-semibold" style="font-size:0.8rem;">
+                        Parsed Fields
+                    </label>
+                    <table class="table table-sm table-bordered mb-0" style="font-size:0.78rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:35%;">Tag</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalFieldsBody"></tbody>
+                    </table>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-outline-secondary"
+                            data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Compose Message Offcanvas ─────────────────────────────────────────── -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="composeOffcanvas"
+         aria-labelledby="composeOffcanvasLabel" style="width:420px;">
+        <div class="offcanvas-header py-2 border-bottom">
+            <h6 class="offcanvas-title" id="composeOffcanvasLabel">
+                <i class="bi bi-pencil-square me-2 text-primary"></i>Compose &amp; Send Message
+            </h6>
+            <button type="button" class="btn-close"
+                    data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body p-3" style="overflow-y:auto;">
+
+            <div class="row g-2 mb-3">
+                <div class="col-7">
+                    <label class="form-label" style="font-size:0.8rem;">Connection</label>
+                    <select class="form-select form-select-sm">
+                        <option>— select connection —</option>
+                    </select>
+                </div>
+                <div class="col-5">
+                    <label class="form-label" style="font-size:0.8rem;">FIX Version</label>
+                    <select class="form-select form-select-sm">
+                        <option>FIX.4.2</option>
+                        <option selected>FIX.4.4</option>
+                        <option>FIX.5.0</option>
+                    </select>
+                </div>
+            </div>
+
+            <label class="form-label" style="font-size:0.8rem;">
+                Raw FIX Message
+                <span class="text-muted ms-1">(use | as field delimiter)</span>
+            </label>
+            <textarea class="form-control font-monospace" id="composeTextarea"
+                      rows="9" style="font-size:0.75rem; resize:vertical;"
+                      placeholder="8=FIX.4.4|35=D|49=CLIENT01|56=BROKER01|..."></textarea>
+
+            <div class="d-flex gap-2 mt-2 mb-3">
+                <button class="btn btn-sm btn-outline-secondary" type="button"
+                        onclick="parseComposeMsg()">
+                    <i class="bi bi-braces me-1"></i>Parse
+                </button>
+                <button class="btn btn-sm btn-primary ms-auto" type="button">
+                    <i class="bi bi-send me-1"></i>Send Message
+                </button>
+            </div>
+
+            <!-- Parsed fields preview -->
+            <div class="table-card">
+                <div class="table-card-header" style="border-radius:6px 6px 0 0;">
+                    <span style="font-size:0.78rem;">Parsed Fields</span>
+                </div>
+                <table class="table table-sm mb-0" style="font-size:0.78rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:45%;">Tag (Field)</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="composeFieldsBody">
+                        <tr>
+                            <td colspan="2" class="text-muted text-center py-2"
+                                style="font-size:0.78rem;">
+                                Click Parse to inspect fields
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+</wicket:extend>
+</body>
+</html>
