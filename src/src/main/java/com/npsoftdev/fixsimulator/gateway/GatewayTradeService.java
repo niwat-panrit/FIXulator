@@ -15,7 +15,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * {@link TradeService} implementation that captures fills from inbound
- * FIX 4.4 Execution Reports (ExecType = '1' partial fill, '2' fill).
+ * FIX Execution Reports where ExecType indicates a trade:
+ * <ul>
+ *   <li>'1' (PartialFill) — FIX 4.x standard</li>
+ *   <li>'2' (Fill)        — FIX 4.x standard</li>
+ *   <li>'F' (Trade)       — used by many counterparties in place of '1'/'2'</li>
+ * </ul>
  */
 public class GatewayTradeService implements TradeService, Serializable {
 
@@ -30,7 +35,8 @@ public class GatewayTradeService implements TradeService, Serializable {
     public void onExecutionReport(SessionID sessionID, Message message) {
         try {
             char execType = message.getChar(ExecType.FIELD);
-            if (execType == ExecType.PARTIAL_FILL || execType == ExecType.FILL) {
+            if (execType == ExecType.PARTIAL_FILL || execType == ExecType.FILL
+                    || execType == ExecType.TRADE) {
                 Map<Integer, String> fields = new LinkedHashMap<>();
                 java.util.Iterator<Field<?>> headerIt = message.getHeader().iterator();
                 while (headerIt.hasNext()) { Field<?> f = headerIt.next(); fields.put(f.getTag(), f.getObject().toString()); }
