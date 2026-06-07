@@ -2,58 +2,65 @@
 <body>
 <wicket:extend>
 
+<div wicket:id="dashboard">
+
     <!-- Page header -->
     <div class="page-header">
         <h4><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h4>
         <span class="text-muted" style="font-size:0.8rem;">
-            <i class="bi bi-clock me-1"></i>Last updated: 09:45:36
+            <i class="bi bi-arrow-clockwise me-1"></i>Updated: <span wicket:id="lastUpdated"></span>
         </span>
     </div>
 
-    <!-- ── Stat Cards ──────────────────────────────────── -->
+    <!-- ── Stat Cards ────────────────────────────────────────────────────────── -->
     <div class="row g-3 mb-4">
+
         <div class="col-sm-6 col-xl-3">
             <div class="stat-card d-flex justify-content-between align-items-start">
                 <div>
-                    <div class="stat-value text-success">3</div>
+                    <div class="stat-value text-success" wicket:id="activeConnections">0</div>
                     <div class="stat-label">Active Connections</div>
                 </div>
-                <i class="bi bi-hdd-network stat-icon text-success" style="font-size:2.2rem;opacity:0.15;"></i>
+                <i class="bi bi-hdd-network text-success" style="font-size:2.2rem;opacity:0.15;"></i>
             </div>
         </div>
+
         <div class="col-sm-6 col-xl-3">
             <div class="stat-card d-flex justify-content-between align-items-start">
                 <div>
-                    <div class="stat-value text-primary">47</div>
-                    <div class="stat-label">Orders Today</div>
+                    <div class="stat-value text-primary" wicket:id="ordersTotal">0</div>
+                    <div class="stat-label">Total Orders</div>
                 </div>
-                <i class="bi bi-card-list stat-icon text-primary" style="font-size:2.2rem;opacity:0.15;"></i>
+                <i class="bi bi-card-list text-primary" style="font-size:2.2rem;opacity:0.15;"></i>
             </div>
         </div>
+
         <div class="col-sm-6 col-xl-3">
             <div class="stat-card d-flex justify-content-between align-items-start">
                 <div>
-                    <div class="stat-value text-info">23</div>
+                    <div class="stat-value text-info" wicket:id="tradesFilled">0</div>
                     <div class="stat-label">Trades Filled</div>
                 </div>
-                <i class="bi bi-arrow-left-right stat-icon text-info" style="font-size:2.2rem;opacity:0.15;"></i>
+                <i class="bi bi-arrow-left-right text-info" style="font-size:2.2rem;opacity:0.15;"></i>
             </div>
         </div>
+
         <div class="col-sm-6 col-xl-3">
             <div class="stat-card d-flex justify-content-between align-items-start">
                 <div>
-                    <div class="stat-value text-warning">152</div>
+                    <div class="stat-value text-warning" wicket:id="messagesLastHour">0</div>
                     <div class="stat-label">Messages (last hour)</div>
                 </div>
-                <i class="bi bi-envelope stat-icon text-warning" style="font-size:2.2rem;opacity:0.15;"></i>
+                <i class="bi bi-envelope text-warning" style="font-size:2.2rem;opacity:0.15;"></i>
             </div>
         </div>
+
     </div>
 
-    <!-- ── Connection Status + Recent Messages ─────────── -->
+    <!-- ── Connection Status + Recent Messages ───────────────────────────────── -->
     <div class="row g-3">
 
-        <!-- Connection Status -->
+        <!-- Session Status -->
         <div class="col-lg-5">
             <div class="table-card">
                 <div class="table-card-header">
@@ -65,27 +72,24 @@
                             <th>Connection</th>
                             <th>Type</th>
                             <th>Status</th>
-                            <th>TX / RX</th>
+                            <th>TX&nbsp;/&nbsp;RX</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td class="fw-semibold">OrderRouter-01</td>
-                            <td><span class="badge bg-secondary">Initiator</span></td>
-                            <td><span class="badge bg-success">CONNECTED</span></td>
-                            <td class="text-muted">42 / 38</td>
+                        <tr wicket:id="noSessions">
+                            <td colspan="4" class="text-center text-muted py-3" style="font-size:0.85rem;">
+                                <i class="bi bi-plug me-1"></i>No sessions configured
+                            </td>
                         </tr>
-                        <tr>
-                            <td class="fw-semibold">MarketData-Feed</td>
-                            <td><span class="badge bg-secondary">Initiator</span></td>
-                            <td><span class="badge bg-danger">DISCONNECTED</span></td>
-                            <td class="text-muted">7 / 5</td>
-                        </tr>
-                        <tr>
-                            <td class="fw-semibold">DropCopy-01</td>
-                            <td><span class="badge bg-dark">Acceptor</span></td>
-                            <td><span class="badge bg-warning text-dark">LISTENING</span></td>
-                            <td class="text-muted">1 / 1</td>
+                        <tr wicket:id="sessionRows">
+                            <td class="fw-semibold" style="font-size:0.85rem;">
+                                <span wicket:id="connName"></span>
+                            </td>
+                            <td><span wicket:id="connType" class="badge"></span></td>
+                            <td><span wicket:id="connStatus" class="badge"></span></td>
+                            <td class="text-muted font-monospace" style="font-size:0.8rem;">
+                                <span wicket:id="txSeq"></span>&nbsp;/&nbsp;<span wicket:id="rxSeq"></span>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -96,56 +100,50 @@
         <div class="col-lg-7">
             <div class="table-card">
                 <div class="table-card-header">
-                    <span><i class="bi bi-journal-text me-2 text-secondary"></i>Recent Messages</span>
-                    <a href="#" class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 8px;">
+                    <span><i class="bi bi-activity me-2 text-secondary"></i>Recent Messages
+                        <span class="text-muted fw-normal ms-1" style="font-size:0.75rem;">(active session, newest first)</span>
+                    </span>
+                    <a wicket:id="viewAllLink"
+                       class="btn btn-xs border" style="font-size:0.75rem;padding:1px 8px;">
                         View All
                     </a>
                 </div>
                 <table class="table table-sm mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Time</th>
-                            <th>Dir</th>
-                            <th>Type</th>
+                            <th style="width:100px;">Time</th>
+                            <th style="width:70px;">Dir</th>
+                            <th style="width:44px;">Type</th>
                             <th>Summary</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td class="text-muted">09:45:31.123</td>
-                            <td><span class="dir-out">&#9654; OUT</span></td>
-                            <td><span class="badge bg-light text-dark border">D</span></td>
-                            <td style="font-size:0.8rem;">NewOrderSingle — AAPL BUY 100 @150.25</td>
+                        <tr wicket:id="noMessages">
+                            <td colspan="4" class="text-center text-muted py-3" style="font-size:0.85rem;">
+                                <i class="bi bi-inbox me-1"></i>No messages yet — select a session and connect
+                            </td>
                         </tr>
-                        <tr>
-                            <td class="text-muted">09:45:31.456</td>
-                            <td><span class="dir-in">&#9664; IN</span></td>
-                            <td><span class="badge bg-light text-dark border">8</span></td>
-                            <td style="font-size:0.8rem;">ExecutionReport — AAPL New (ExecType=0)</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">09:45:35.789</td>
-                            <td><span class="dir-out">&#9654; OUT</span></td>
-                            <td><span class="badge bg-light text-dark border">D</span></td>
-                            <td style="font-size:0.8rem;">NewOrderSingle — MSFT SELL 50 @340.00</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">09:45:36.012</td>
-                            <td><span class="dir-in">&#9664; IN</span></td>
-                            <td><span class="badge bg-light text-dark border">8</span></td>
-                            <td style="font-size:0.8rem;">ExecutionReport — MSFT PartFill 20 @340.10</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">09:45:40.001</td>
-                            <td><span class="dir-in">&#9664; IN</span></td>
-                            <td><span class="badge bg-light text-dark border">0</span></td>
-                            <td style="font-size:0.8rem;">Heartbeat — OrderRouter-01</td>
+                        <tr wicket:id="recentMsgRows">
+                            <td class="text-muted font-monospace" style="font-size:0.79rem;">
+                                <span wicket:id="msgTime"></span>
+                            </td>
+                            <td><span wicket:id="msgDir"></span></td>
+                            <td>
+                                <span wicket:id="msgType"
+                                      class="badge bg-light text-dark border font-monospace"></span>
+                            </td>
+                            <td style="font-size:0.8rem;">
+                                <span wicket:id="msgSummary"></span>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
+
     </div>
+
+</div><!-- end #dashboard -->
 
 </wicket:extend>
 </body>
