@@ -122,3 +122,9 @@ jacoco.exec
 # ── Docker ────────────────────────────────────────────────────────────────────
 # (keep .devcontainer tracked, but ignore any local override files)
 .devcontainer/*.local.*
+
+# ── Runtime data files (local testing) ───────────────────────────────────────
+# Ignore live YAML data files so local test data is never accidentally committed.
+# Check in *.yaml.sample files instead as the canonical starting point.
+*.yaml
+!*.yaml.sample

@@ -1,0 +1,119 @@
+templates:
+- id: built-in.nos.default
+  name: New Order Single — default
+  description: "Auto-fills ClOrdID, TransactTime, and ISIN. Edit overrides per request."
+  beginString: FIX.4.4
+  msgType: D
+  scope:
+    type: global
+  deletionProtected: true
+  priority: 100
+  fields:
+  - tag: 11
+    value:
+      type: placeholder
+      placeholderType: ORDER_ID
+  - tag: 60
+    value:
+      type: placeholder
+      placeholderType: TRANSACT_TIME
+  - tag: 55
+    value:
+      type: userInput
+      name: symbol
+  - tag: 48
+    value:
+      type: derived
+      sourceTag: 55
+      mappingName: symbol-to-isin
+  - tag: 22
+    value:
+      type: literal
+      value: 4
+  - tag: 54
+    value:
+      type: userInput
+      name: side
+  - tag: 38
+    value:
+      type: userInput
+      name: quantity
+  - tag: 44
+    value:
+      type: userInput
+      name: price
+  - tag: 40
+    value:
+      type: userInput
+      name: ordType
+      defaultValue: 2
+  - tag: 59
+    value:
+      type: userInput
+      name: timeInForce
+      defaultValue: 0
+  - tag: 21
+    value:
+      type: literal
+      value: 1
+- id: built-in.ocr.default
+  name: Order Cancel/Replace — default
+  description: Amend an open order. OrigClOrdID is pre-filled from the selected row.
+  beginString: FIX.4.4
+  msgType: G
+  scope:
+    type: global
+  deletionProtected: true
+  priority: 100
+  fields:
+  - tag: 11
+    value:
+      type: placeholder
+      placeholderType: ORDER_ID
+  - tag: 60
+    value:
+      type: placeholder
+      placeholderType: TRANSACT_TIME
+  - tag: 41
+    value:
+      type: userInput
+      name: origClOrdId
+  - tag: 55
+    value:
+      type: userInput
+      name: symbol
+  - tag: 48
+    value:
+      type: derived
+      sourceTag: 55
+      mappingName: symbol-to-isin
+  - tag: 22
+    value:
+      type: literal
+      value: 4
+  - tag: 54
+    value:
+      type: userInput
+      name: side
+  - tag: 38
+    value:
+      type: userInput
+      name: quantity
+  - tag: 44
+    value:
+      type: userInput
+      name: price
+  - tag: 40
+    value:
+      type: userInput
+      name: ordType
+      defaultValue: 2
+  - tag: 59
+    value:
+      type: userInput
+      name: timeInForce
+      defaultValue: 0
+  - tag: 21
+    value:
+      type: literal
+      value: 1

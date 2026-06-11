@@ -1,0 +1,4 @@
+customValues:
+- name: myconstant
+  description: Sample constant value
+  constantValue: HELLO_WORLD
