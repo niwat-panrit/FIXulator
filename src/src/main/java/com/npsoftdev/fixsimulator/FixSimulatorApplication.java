@@ -22,6 +22,7 @@ import com.npsoftdev.fixsimulator.service.TradeService;
 import com.npsoftdev.fixsimulator.template.DynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.TemplateService;
 import com.npsoftdev.fixsimulator.template.ValueMappingService;
+import com.npsoftdev.fixsimulator.user.UserRepository;
 import org.apache.wicket.Page;
 import org.apache.wicket.Session;
 import org.apache.wicket.csp.CSPDirective;
@@ -52,6 +53,7 @@ public class FixSimulatorApplication extends WebApplication {
     private TemplateService      templateService;
     private ValueMappingService  valueMappingService;
     private DynamicValueRegistry dynamicValueRegistry;
+    private UserRepository       userRepository;
 
     // ── WebApplication ────────────────────────────────────────────────────────
 
@@ -103,6 +105,7 @@ public class FixSimulatorApplication extends WebApplication {
     public TemplateService      getTemplateService()      { return templateService; }
     public ValueMappingService  getValueMappingService()  { return valueMappingService; }
     public DynamicValueRegistry getDynamicValueRegistry() { return dynamicValueRegistry; }
+    public UserRepository       getUserRepository()       { return userRepository; }
 
     /** Called by {@link DefaultFixGatewayPlugin#initialize}. */
     public void setConnectionService(ConnectionService cs) { this.connectionService = cs; }
@@ -125,6 +128,9 @@ public class FixSimulatorApplication extends WebApplication {
     /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
     public void setDynamicValueRegistry(DynamicValueRegistry dvr)   { this.dynamicValueRegistry = dvr; }
 
+    /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
+    public void setUserRepository(UserRepository ur)                 { this.userRepository = ur; }
+
     // ── Plugin registration ───────────────────────────────────────────────────
 
     private void registerBuiltInPlugins() {
@@ -144,7 +150,7 @@ public class FixSimulatorApplication extends WebApplication {
         pluginRegistry.register(new DefaultOrderManagerPlugin(
                 "orders", "Orders", "bi-card-list",
                 NavSection.MONITORING, OrdersPage.class,
-                gateway));
+                gateway, resolveDataDirectory()));
         // Dynamic Orders page removed — order sending is integrated into the Orders page.
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "trades", "Trades", "bi-arrow-left-right",
@@ -173,6 +179,17 @@ public class FixSimulatorApplication extends WebApplication {
     }
 
     // ── FIX settings ─────────────────────────────────────────────────────────
+
+    /**
+     * Resolves the directory where YAML data files are stored.
+     *
+     * <p>Returns {@code <working-directory>/data}. The directory is created
+     * lazily by each repository on first write, so no explicit creation is
+     * needed here.</p>
+     */
+    private Path resolveDataDirectory() {
+        return Paths.get(System.getProperty("user.dir"), "data");
+    }
 
     /**
      * Resolves the writable path for {@code fix-gateway.cfg}.

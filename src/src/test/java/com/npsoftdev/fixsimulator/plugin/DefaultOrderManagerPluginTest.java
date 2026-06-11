@@ -13,6 +13,7 @@ import quickfix.Message;
 import quickfix.SessionID;
 import quickfix.field.*;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +48,8 @@ class DefaultOrderManagerPluginTest {
 
         orderManager = new DefaultOrderManagerPlugin(
                 "orders", "Orders", "bi-card-list",
-                NavSection.MONITORING, null, gateway);
+                NavSection.MONITORING, null, gateway,
+                Path.of(System.getProperty("java.io.tmpdir"), "fix-simulator-test"));
 
         orderManager.initialize(app);
     }

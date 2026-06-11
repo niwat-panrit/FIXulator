@@ -13,10 +13,15 @@ import com.npsoftdev.fixsimulator.template.DynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.FieldSpec;
 import com.npsoftdev.fixsimulator.template.FixMessageBuilder;
 import com.npsoftdev.fixsimulator.template.FixMessageTemplate;
-import com.npsoftdev.fixsimulator.template.InMemoryDynamicValueRegistry;
-import com.npsoftdev.fixsimulator.template.InMemoryTemplateRepository;
-import com.npsoftdev.fixsimulator.template.InMemoryValueMappingService;
+import com.npsoftdev.fixsimulator.persistence.YamlPersistenceService;
+import com.npsoftdev.fixsimulator.template.YamlDynamicValueRegistry;
+import com.npsoftdev.fixsimulator.template.YamlTemplateRepository;
+import com.npsoftdev.fixsimulator.template.YamlValueMappingService;
+import com.npsoftdev.fixsimulator.user.UserRepository;
+import com.npsoftdev.fixsimulator.user.YamlUserRepository;
 import com.npsoftdev.fixsimulator.template.PlaceholderResolver;
+
+import java.nio.file.Path;
 import com.npsoftdev.fixsimulator.template.PlaceholderType;
 import com.npsoftdev.fixsimulator.template.TemplateRepository;
 import com.npsoftdev.fixsimulator.template.TemplateScope;
@@ -71,6 +76,9 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
     /** Gateway this plugin subscribes to for FIX message events. */
     private final DefaultFixGatewayPlugin gateway;
 
+    /** Directory where YAML data files are read from and written to. */
+    private final Path dataDir;
+
     private GatewayOrderService orderService;
     private GatewayTradeService tradeService;
 
@@ -81,18 +89,21 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
     private DynamicValueRegistry  dynamicValueRegistry;
     private FixMessageBuilder     messageBuilder;
     private TemplateService       templateService;
+    private UserRepository        userRepository;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public DefaultOrderManagerPlugin(String id, String label, String iconClass,
                                       NavSection section, Class<? extends BasePage> pageClass,
-                                      DefaultFixGatewayPlugin gateway) {
+                                      DefaultFixGatewayPlugin gateway,
+                                      Path dataDir) {
         this.id        = id;
         this.label     = label;
         this.iconClass = iconClass;
         this.section   = section;
         this.pageClass = pageClass;
         this.gateway   = gateway;
+        this.dataDir   = dataDir;
     }
 
     // ── SimulatorPlugin ───────────────────────────────────────────────────────
@@ -110,13 +121,14 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         orderService = new GatewayOrderService(gateway.getSessionIDs(), facade);
         tradeService = new GatewayTradeService();
 
-        // ── Template stack ────────────────────────────────────────────────────
-        // Swap any of these for a persistent implementation later; the wiring
-        // is the only thing that has to change.
-        templateRepository   = new InMemoryTemplateRepository();
+        // ── Template stack (YAML-backed) ──────────────────────────────────────
+        YamlPersistenceService yamlService = new YamlPersistenceService(dataDir);
+
+        templateRepository   = new YamlTemplateRepository(yamlService);
         placeholderResolver  = new DefaultPlaceholderResolver();
-        valueMappingService  = new InMemoryValueMappingService();
-        dynamicValueRegistry = new InMemoryDynamicValueRegistry();
+        valueMappingService  = new YamlValueMappingService(yamlService);
+        dynamicValueRegistry = new YamlDynamicValueRegistry(yamlService);
+        userRepository       = new YamlUserRepository(yamlService);
         messageBuilder       = new DefaultFixMessageBuilder(
                 placeholderResolver, valueMappingService, dynamicValueRegistry);
         templateService      = new DefaultTemplateService(
@@ -132,6 +144,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         app.setTemplateService(templateService);
         app.setValueMappingService(valueMappingService);
         app.setDynamicValueRegistry(dynamicValueRegistry);
+        app.setUserRepository(userRepository);
     }
 
     /**
@@ -202,6 +215,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
     public TemplateRepository   getTemplateRepository()    { return templateRepository; }
     public ValueMappingService  getValueMappingService()   { return valueMappingService; }
     public DynamicValueRegistry getDynamicValueRegistry()  { return dynamicValueRegistry; }
+    public UserRepository       getUserRepository()        { return userRepository; }
 
     // ── Message routing ───────────────────────────────────────────────────────
 
