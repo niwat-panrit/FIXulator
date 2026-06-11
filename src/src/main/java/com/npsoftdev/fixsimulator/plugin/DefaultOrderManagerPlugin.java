@@ -164,7 +164,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
      * engine has something to validate against on first run.
      */
     private static void seedBuiltInTemplates(TemplateRepository repo) {
-        repo.save(FixMessageTemplate.builder()
+        if (repo.findById("built-in.nos.default").isEmpty()) repo.save(FixMessageTemplate.builder()
                 .id("built-in.nos.default")
                 .name("New Order Single — default")
                 .deletionProtected(true)
@@ -185,7 +185,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
                 .addField(FieldSpec.literal    (HandlInst.FIELD,    "1"))   // Automated
                 .build());
 
-        repo.save(FixMessageTemplate.builder()
+        if (repo.findById("built-in.ocr.default").isEmpty()) repo.save(FixMessageTemplate.builder()
                 .id("built-in.ocr.default")
                 .name("Order Cancel/Replace — default")
                 .deletionProtected(true)

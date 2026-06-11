@@ -153,7 +153,7 @@ public class YamlTemplateRepository implements TemplateRepository {
                 .beginString(d.beginString)
                 .msgType(d.msgType)
                 .scope(scopeFromDto(d.scope))
-                .deletionProtected(d.deletionProtected)
+                .deletionProtected(Boolean.TRUE.equals(d.deletionProtected))
                 .priority(d.priority > 0 ? d.priority : 100);
         if (d.fields != null) {
             for (FieldSpecDto fs : d.fields) {
