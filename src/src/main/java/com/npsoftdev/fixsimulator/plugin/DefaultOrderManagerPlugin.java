@@ -153,8 +153,9 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         gateway.addMessageListener(new OrderManagerListener());
 
         // ── Log file service ──────────────────────────────────────────────────
-        String logDir = System.getProperty("app.log.dir", "logs");
-        Path logFile = Paths.get(logDir, "app.log");
+        String logDir  = System.getProperty("app.log.dir",  "logs");
+        String logName = System.getProperty("app.log.name", "app");
+        Path logFile   = Paths.get(logDir, logName + ".log");
         DefaultLogFileService logFileService = new DefaultLogFileService(logFile);
 
         app.setOrderService(orderService);

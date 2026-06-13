@@ -7,7 +7,8 @@
         2. Default: logs/ relative to working directory
     -->
     <property name="LOG_DIR"     value="${app.log.dir:-logs}"/>
-    <property name="LOG_FILE"    value="${LOG_DIR}/app.log"/>
+    <property name="LOG_NAME"    value="${app.log.name:-app}"/>
+    <property name="LOG_FILE"    value="${LOG_DIR}/${LOG_NAME}.log"/>
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%logger{36}] %msg%n"/>
 
     <!-- Console (stdout) -->
@@ -21,7 +22,7 @@
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_FILE}</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_DIR}/app-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_DIR}/${LOG_NAME}-%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>30</maxHistory>
             <totalSizeCap>500MB</totalSizeCap>
         </rollingPolicy>

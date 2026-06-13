@@ -7,6 +7,8 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.TimeZone;
 
 /**
@@ -17,7 +19,10 @@ import java.util.TimeZone;
 public class Main {
 
     public static void main(String[] args) throws Exception {
+        // Both calls must happen before any SLF4J logger is first accessed,
+        // so that Logback picks up the system properties when it initialises.
         applyOsTimezone();
+        applyStartupLogName();
 
         int port = 8080;
         for (String arg : args) {
@@ -50,6 +55,19 @@ public class Main {
         System.out.printf("%n  FIX Simulator  →  http://localhost:%d%n%n", port);
 
         server.join();
+    }
+
+    /**
+     * Sets the {@code app.log.name} system property to {@code app-YYYYMMDD-HHmmss}
+     * using the current local time (after {@link #applyOsTimezone()} has run).
+     * Logback reads this property when it initialises its file appender.
+     * No-op if the property is already set externally.
+     */
+    private static void applyStartupLogName() {
+        if (System.getProperty("app.log.name") != null) return;
+        String ts = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        System.setProperty("app.log.name", "app-" + ts);
     }
 
     /**
