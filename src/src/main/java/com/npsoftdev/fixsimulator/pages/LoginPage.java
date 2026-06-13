@@ -4,10 +4,11 @@ import com.npsoftdev.fixsimulator.FixSimulatorApplication;
 import com.npsoftdev.fixsimulator.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.user.AuthService;
 import com.npsoftdev.fixsimulator.user.User;
+import org.apache.wicket.markup.head.CssReferenceHeaderItem;
 import org.apache.wicket.markup.head.CssUrlReferenceHeaderItem;
 import org.apache.wicket.markup.head.IHeaderResponse;
-import org.apache.wicket.markup.head.JavaScriptUrlReferenceHeaderItem;
 import org.apache.wicket.markup.html.WebPage;
+import org.apache.wicket.request.resource.PackageResourceReference;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.form.PasswordTextField;
 import org.apache.wicket.markup.html.form.TextField;
@@ -83,12 +84,10 @@ public class LoginPage extends WebPage {
     @Override
     public void renderHead(IHeaderResponse response) {
         super.renderHead(response);
-        response.render(CssUrlReferenceHeaderItem.forUrl(
-                "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"));
+        response.render(CssReferenceHeaderItem.forReference(
+                new PackageResourceReference(LoginPage.class, "LoginPage.css")));
         response.render(CssUrlReferenceHeaderItem.forUrl(
                 "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"));
-        response.render(JavaScriptUrlReferenceHeaderItem.forUrl(
-                "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"));
     }
 
     // ── Form model ────────────────────────────────────────────────────────────
