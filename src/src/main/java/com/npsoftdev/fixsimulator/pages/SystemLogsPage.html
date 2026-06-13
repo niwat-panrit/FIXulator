@@ -2,144 +2,61 @@
 <body>
 <wicket:extend>
 
-    <div class="page-header">
-        <h4><i class="bi bi-file-earmark-text me-2 text-primary"></i>System Logs</h4>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-download me-1"></i>Export
-            </button>
-            <button class="btn btn-sm btn-outline-danger">
-                <i class="bi bi-trash me-1"></i>Clear
+<div class="page-header">
+    <h4><i class="bi bi-file-earmark-text me-2 text-primary"></i>System Logs</h4>
+    <a wicket:id="downloadLink" href="#" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>Download Log
+    </a>
+</div>
+
+<!-- Toolbar -->
+<div class="log-toolbar mb-3">
+
+    <!-- Left: toggles -->
+    <div class="d-flex align-items-center gap-3">
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="wrapToggle"/>
+            <label class="form-check-label small" for="wrapToggle">Wrap lines</label>
+        </div>
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="tailToggle" checked/>
+            <label class="form-check-label small" for="tailToggle">
+                <span id="tailLabel">Tailing</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Right: search -->
+    <div class="d-flex align-items-center gap-2">
+        <div class="form-check mb-0 d-flex align-items-center gap-1">
+            <input class="form-check-input" type="checkbox" id="regexToggle"/>
+            <label class="form-check-label small" for="regexToggle">Regex</label>
+        </div>
+        <div class="input-group input-group-sm log-search-group">
+            <span class="input-group-text log-search-icon">
+                <i class="bi bi-search"></i>
+            </span>
+            <input type="text" class="form-control log-search-input" id="searchInput"
+                   placeholder="Search logs (string or regex)..."/>
+            <button class="btn log-search-clear" id="searchClear" title="Clear search">
+                <i class="bi bi-x-lg"></i>
             </button>
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="toolbar mb-3">
-        <select class="form-select form-select-sm" style="width:110px;">
-            <option>ALL</option>
-            <option>INFO</option>
-            <option>WARN</option>
-            <option>ERROR</option>
-            <option>DEBUG</option>
-        </select>
-        <select class="form-select form-select-sm" style="width:180px;">
-            <option>All Loggers</option>
-            <option>FIX.OrderRouter-01</option>
-            <option>FIX.MarketData-Feed</option>
-            <option>FIX.DropCopy-01</option>
-            <option>Application</option>
-        </select>
-        <input type="text" class="form-control form-control-sm" placeholder="Search..." style="width:200px;"/>
-        <button class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>Search</button>
-        <button class="btn btn-sm btn-outline-secondary">Clear</button>
-        <div class="form-check ms-2 mb-0 d-flex align-items-center">
-            <input class="form-check-input me-1" type="checkbox" id="autoScroll" checked/>
-            <label class="form-check-label" for="autoScroll" style="font-size:0.8rem;">Auto-scroll</label>
-        </div>
-    </div>
+</div>
 
-    <!-- Log Table -->
-    <div class="table-card">
-        <div style="max-height:500px; overflow-y:auto; font-family:monospace; font-size:0.8rem;">
-            <table class="table table-sm table-hover mb-0">
-                <thead class="table-dark" style="position:sticky;top:0;">
-                    <tr>
-                        <th style="width:160px;">Timestamp</th>
-                        <th style="width:60px;">Level</th>
-                        <th style="width:200px;">Logger</th>
-                        <th>Message</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:29:58.001</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>Application</td>
-                        <td>FIX Simulator started. Loading sessions...</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:29:59.123</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>Session created: CLIENT01 -&gt; BROKER01 (Initiator, FIX.4.2)</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:30:00.001</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>Connecting to 192.168.1.100:9001...</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:30:00.234</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>TCP connection established to 192.168.1.100:9001</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:30:00.235</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>Sent: Logon(A) — HeartBtInt=30, ResetSeqNumFlag=N</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:30:00.345</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>Received: Logon(A) from BROKER01 — Session CONNECTED</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:30:01.123</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>Sent: NewOrderSingle(D) — ClOrdID=CL20260415-001 AAPL BUY 100 @150.25</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:30:01.456</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>Received: ExecutionReport(8) — ExecType=0(New) ClOrdID=CL20260415-001</td>
-                    </tr>
-                    <tr class="log-warn">
-                        <td class="text-muted">2026-04-15 09:40:00.001</td>
-                        <td><span class="badge bg-warning text-dark">WARN</span></td>
-                        <td>FIX.MarketData-Feed</td>
-                        <td>Connection attempt failed (attempt 1/5). Retrying in 5s...</td>
-                    </tr>
-                    <tr class="log-warn">
-                        <td class="text-muted">2026-04-15 09:40:05.002</td>
-                        <td><span class="badge bg-warning text-dark">WARN</span></td>
-                        <td>FIX.MarketData-Feed</td>
-                        <td>Connection attempt failed (attempt 2/5). Retrying in 5s...</td>
-                    </tr>
-                    <tr class="log-error">
-                        <td class="text-muted">2026-04-15 09:40:30.003</td>
-                        <td><span class="badge bg-danger">ERROR</span></td>
-                        <td>FIX.MarketData-Feed</td>
-                        <td>Max reconnect attempts reached. Session DISCONNECTED. java.net.ConnectException: Connection refused</td>
-                    </tr>
-                    <tr class="log-info">
-                        <td class="text-muted">2026-04-15 09:45:31.123</td>
-                        <td><span class="badge bg-info text-dark">INFO</span></td>
-                        <td>FIX.OrderRouter-01</td>
-                        <td>Sent: NewOrderSingle(D) — ClOrdID=CL20260415-005 TSLA BUY 200 @250.00</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top"
-             style="font-size:0.8rem; color:#6b7280;">
-            <span>Showing last 12 of 348 log entries</span>
-            <nav>
-                <ul class="pagination pagination-sm mb-0">
-                    <li class="page-item disabled"><a class="page-link" href="#">&#8592;</a></li>
-                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                    <li class="page-item"><a class="page-link" href="#">2</a></li>
-                    <li class="page-item"><a class="page-link" href="#">&#8594;</a></li>
-                </ul>
-            </nav>
-        </div>
+<!-- Log viewer -->
+<div class="log-viewer-card">
+    <div id="logContent" class="log-content">
+        <div id="logLines"></div>
     </div>
+    <div class="log-status-bar">
+        <span class="bi bi-circle-fill log-tail-dot" id="tailDot"></span>
+        <span id="logStatus">Loading...</span>
+        <span id="searchStatus" class="log-search-status"></span>
+    </div>
+</div>
 
 </wicket:extend>
 </body>

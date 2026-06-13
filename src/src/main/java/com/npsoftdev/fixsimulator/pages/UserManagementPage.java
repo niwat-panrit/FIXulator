@@ -2,6 +2,8 @@ package com.npsoftdev.fixsimulator.pages;
 
 import com.npsoftdev.fixsimulator.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.user.DefaultAuthService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.npsoftdev.fixsimulator.user.RoleRegistry;
 import com.npsoftdev.fixsimulator.user.User;
 import com.npsoftdev.fixsimulator.user.UserRepository;
@@ -28,6 +30,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class UserManagementPage extends BasePage {
+
+    private static final Logger log = LoggerFactory.getLogger(UserManagementPage.class);
 
     private final UserFormModel formModel = new UserFormModel();
 
@@ -90,6 +94,9 @@ public class UserManagementPage extends BasePage {
                             return;
                         }
                         app().getUserRepository().delete(u.username());
+                        log.info("User '{}' deleted by '{}'", u.username(),
+                                FixSimulatorSession.get().getAuthenticatedUser() != null
+                                        ? FixSimulatorSession.get().getAuthenticatedUser().username() : "?");
                         target.add(listContainer, pageFeedback);
                     }
                 });
@@ -203,6 +210,9 @@ public class UserManagementPage extends BasePage {
                             .maxSessions(formModel.maxSessions)
                             .build();
                     repo.save(user);
+                    log.info("User '{}' created by '{}'", formModel.username.trim(),
+                            FixSimulatorSession.get().getAuthenticatedUser() != null
+                                    ? FixSimulatorSession.get().getAuthenticatedUser().username() : "?");
                 } else {
                     User existing = repo.findByUsername(formModel.editingUsername)
                             .orElseThrow(() -> new IllegalStateException(
@@ -219,6 +229,9 @@ public class UserManagementPage extends BasePage {
                             .maxSessions(formModel.maxSessions)
                             .build();
                     repo.save(updated);
+                    log.info("User '{}' updated by '{}'", formModel.editingUsername,
+                            FixSimulatorSession.get().getAuthenticatedUser() != null
+                                    ? FixSimulatorSession.get().getAuthenticatedUser().username() : "?");
                 }
 
                 target.add(listContainer, userForm, pageFeedback);

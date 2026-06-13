@@ -1,0 +1,145 @@
+/* ── Log viewer toolbar ───────────────────────────────────────────────────── */
+
+.log-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+/* ── Search group ─────────────────────────────────────────────────────────── */
+
+.log-search-group {
+    min-width: 260px;
+}
+
+.log-search-icon {
+    background: #111827;
+    border-color: #30363d;
+    color: #6b7280;
+}
+
+.log-search-input {
+    background: #111827 !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
+}
+
+.log-search-input:focus {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
+}
+
+.log-search-input::placeholder {
+    color: #4b5563 !important;
+}
+
+.log-search-clear {
+    background: #111827;
+    border: 1px solid #30363d;
+    border-left: none;
+    color: #6b7280;
+    padding: 0 0.55rem;
+}
+
+.log-search-clear:hover {
+    background: #1f2937;
+    color: #e6edf3;
+}
+
+/* ── Log viewer card ──────────────────────────────────────────────────────── */
+
+.log-viewer-card {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Log content area ─────────────────────────────────────────────────────── */
+
+.log-content {
+    font-family: "Cascadia Code", "Fira Mono", ui-monospace, "Courier New", monospace;
+    font-size: 0.775rem;
+    background: #0d1117;
+    color: #c9d1d9;
+    overflow-y: auto;
+    overflow-x: auto;
+    max-height: calc(100vh - 310px);
+    min-height: 380px;
+    padding: 0.6rem 0.9rem;
+    line-height: 1.65;
+    flex: 1;
+}
+
+/* ── Individual log line ──────────────────────────────────────────────────── */
+
+.log-line {
+    white-space: pre;   /* no wrap by default */
+    display: block;
+    padding: 0.05rem 0.25rem;
+    border-radius: 3px;
+}
+
+.log-line:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* Wrap mode — toggled by JS via .log-wrapped on #logContent */
+.log-content.log-wrapped .log-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ── Level colours ────────────────────────────────────────────────────────── */
+
+.log-error { color: #f87171; }
+.log-warn  { color: #fbbf24; }
+.log-debug { color: #6b7280; }
+
+/* ── Search highlight ─────────────────────────────────────────────────────── */
+
+.log-line mark {
+    background: rgba(251, 191, 36, 0.3);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+/* ── Status bar ───────────────────────────────────────────────────────────── */
+
+.log-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.9rem;
+    border-top: 1px solid #30363d;
+    font-size: 0.75rem;
+    color: #6b7280;
+    background: #0d1117;
+    flex-shrink: 0;
+}
+
+/* Tailing indicator dot */
+.log-tail-dot {
+    font-size: 0.45rem;
+    color: #374151;
+    transition: color 0.3s;
+}
+
+.log-tail-dot.log-tail-active {
+    color: #22c55e;
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+}
+
+.log-search-status {
+    color: #fbbf24;
+}

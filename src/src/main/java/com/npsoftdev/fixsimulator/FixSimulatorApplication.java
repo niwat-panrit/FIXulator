@@ -19,6 +19,7 @@ import com.npsoftdev.fixsimulator.plugin.DefaultOrderManagerPlugin;
 import com.npsoftdev.fixsimulator.plugin.NavSection;
 import com.npsoftdev.fixsimulator.plugin.PluginRegistry;
 import com.npsoftdev.fixsimulator.service.ConnectionService;
+import com.npsoftdev.fixsimulator.service.LogFileService;
 import com.npsoftdev.fixsimulator.service.MessageLogService;
 import com.npsoftdev.fixsimulator.service.OrderService;
 import com.npsoftdev.fixsimulator.service.TradeService;
@@ -66,6 +67,7 @@ public class FixSimulatorApplication extends WebApplication {
     private DynamicValueRegistry dynamicValueRegistry;
     private UserRepository       userRepository;
     private AuthService          authService;
+    private LogFileService       logFileService;
 
     // ── WebApplication ────────────────────────────────────────────────────────
 
@@ -177,6 +179,7 @@ public class FixSimulatorApplication extends WebApplication {
     public DynamicValueRegistry getDynamicValueRegistry() { return dynamicValueRegistry; }
     public UserRepository       getUserRepository()       { return userRepository; }
     public AuthService          getAuthService()          { return authService; }
+    public LogFileService       getLogFileService()       { return logFileService; }
 
     /** Called by {@link DefaultFixGatewayPlugin#initialize}. */
     public void setConnectionService(ConnectionService cs)  { this.connectionService = cs; }
@@ -196,6 +199,8 @@ public class FixSimulatorApplication extends WebApplication {
     public void setUserRepository(UserRepository ur)               { this.userRepository = ur; }
     /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
     public void setAuthService(AuthService as)                     { this.authService = as; }
+    /** Called by {@link DefaultOrderManagerPlugin#initialize}. */
+    public void setLogFileService(LogFileService lfs)              { this.logFileService = lfs; }
 
     // ── Plugin registration ───────────────────────────────────────────────────
 

@@ -47,11 +47,15 @@ public class DefaultAuthService implements AuthService {
         if (!user.isActive()) return Optional.empty();
         if (user.passwordHash() == null) return Optional.empty();
         try {
-            if (!BCrypt.checkpw(password, user.passwordHash())) return Optional.empty();
+            if (!BCrypt.checkpw(password, user.passwordHash())) {
+                log.info("Authentication failed: bad password for user '{}'", username);
+                return Optional.empty();
+            }
         } catch (Exception e) {
-            log.warn("BCrypt check failed for user {}: {}", username, e.getMessage());
+            log.warn("BCrypt check failed for user '{}': {}", username, e.getMessage());
             return Optional.empty();
         }
+        log.info("Authentication succeeded for user '{}'", username);
         return Optional.of(user);
     }
 
@@ -79,7 +83,7 @@ public class DefaultAuthService implements AuthService {
         if (username == null || sessionId == null) return;
         sessionToUser.put(sessionId, username);
         userToSessions.computeIfAbsent(username, k -> ConcurrentHashMap.newKeySet()).add(sessionId);
-        log.debug("Session registered: user={} sessionId={}", username, sessionId);
+        log.info("Session started: user='{}'", username);
     }
 
     @Override
@@ -88,7 +92,7 @@ public class DefaultAuthService implements AuthService {
         sessionToUser.remove(sessionId);
         Set<String> sessions = userToSessions.get(username);
         if (sessions != null) sessions.remove(sessionId);
-        log.debug("Session unregistered: user={} sessionId={}", username, sessionId);
+        log.info("Session ended: user='{}'", username);
     }
 
     @Override
@@ -98,7 +102,7 @@ public class DefaultAuthService implements AuthService {
         if (username != null) {
             Set<String> sessions = userToSessions.get(username);
             if (sessions != null) sessions.remove(sessionId);
-            log.debug("Session expired: user={} sessionId={}", username, sessionId);
+            log.info("Session expired: user='{}'", username);
         }
     }
 

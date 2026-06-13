@@ -17,6 +17,7 @@ import com.npsoftdev.fixsimulator.persistence.YamlPersistenceService;
 import com.npsoftdev.fixsimulator.template.YamlDynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.YamlTemplateRepository;
 import com.npsoftdev.fixsimulator.template.YamlValueMappingService;
+import com.npsoftdev.fixsimulator.service.DefaultLogFileService;
 import com.npsoftdev.fixsimulator.user.DefaultAuthService;
 import com.npsoftdev.fixsimulator.user.RoleRegistry;
 import com.npsoftdev.fixsimulator.user.User;
@@ -25,6 +26,7 @@ import com.npsoftdev.fixsimulator.user.YamlUserRepository;
 import com.npsoftdev.fixsimulator.template.PlaceholderResolver;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -150,6 +152,11 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
 
         gateway.addMessageListener(new OrderManagerListener());
 
+        // ── Log file service ──────────────────────────────────────────────────
+        String logDir = System.getProperty("app.log.dir", "logs");
+        Path logFile = Paths.get(logDir, "app.log");
+        DefaultLogFileService logFileService = new DefaultLogFileService(logFile);
+
         app.setOrderService(orderService);
         app.setTradeService(tradeService);
         app.setTemplateService(templateService);
@@ -157,6 +164,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         app.setDynamicValueRegistry(dynamicValueRegistry);
         app.setUserRepository(userRepository);
         app.setAuthService(authService);
+        app.setLogFileService(logFileService);
     }
 
     /**

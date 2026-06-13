@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--
+      Log directory is resolved as:
+        1. System property -Dapp.log.dir=<path>
+        2. Default: logs/ relative to working directory
+    -->
+    <property name="LOG_DIR"     value="${app.log.dir:-logs}"/>
+    <property name="LOG_FILE"    value="${LOG_DIR}/app.log"/>
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%logger{36}] %msg%n"/>
+
+    <!-- Console (stdout) -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Daily rolling file — the active log is always LOG_FILE -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/app-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Suppress noisy third-party libraries; they only reach the log at WARN+ -->
+    <logger name="quickfix"          level="WARN"/>
+    <logger name="quickfixj"         level="WARN"/>
+    <logger name="org.eclipse.jetty" level="WARN"/>
+    <logger name="org.apache.wicket" level="WARN"/>
+
+    <!-- Our application code -->
+    <logger name="com.npsoftdev" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>
