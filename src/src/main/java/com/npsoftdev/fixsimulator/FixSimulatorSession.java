@@ -1,11 +1,13 @@
 package com.npsoftdev.fixsimulator;
 
+import com.npsoftdev.fixsimulator.user.User;
 import org.apache.wicket.protocol.http.WebSession;
 import org.apache.wicket.request.Request;
 
 /**
  * Custom Wicket session that holds per-user UI state, most importantly
- * the ID of the currently selected (active) FIX session.
+ * the ID of the currently selected (active) FIX session and the
+ * authenticated user principal.
  */
 public class FixSimulatorSession extends WebSession {
 
@@ -21,9 +23,46 @@ public class FixSimulatorSession extends WebSession {
      */
     private String pendingFixMessage;
 
+    /** The authenticated user, or {@code null} when not signed in. */
+    private User authenticatedUser;
+
     public FixSimulatorSession(Request request) {
         super(request);
     }
+
+    // ── Authentication ────────────────────────────────────────────────────────
+
+    /** Returns {@code true} when a user is currently signed in. */
+    public boolean isAuthenticated() {
+        return authenticatedUser != null;
+    }
+
+    /** Returns the authenticated user, or {@code null} when not signed in. */
+    public User getAuthenticatedUser() {
+        return authenticatedUser;
+    }
+
+    /**
+     * Signs in the given user and marks the session dirty so it is persisted.
+     * Call {@link com.npsoftdev.fixsimulator.user.AuthService#registerSession} separately
+     * to track this session in the session-limit counter.
+     */
+    public void signIn(User user) {
+        this.authenticatedUser = user;
+        dirty();
+    }
+
+    /**
+     * Signs out the current user and marks the session dirty.
+     * Call {@link com.npsoftdev.fixsimulator.user.AuthService#unregisterSession} first
+     * to release the session-limit slot, then call this.
+     */
+    public void signOut() {
+        this.authenticatedUser = null;
+        dirty();
+    }
+
+    // ── Active FIX session ────────────────────────────────────────────────────
 
     /** Returns the ID of the active FIX session, or {@code null} if none selected yet. */
     public String getActiveSessionId() {
@@ -35,6 +74,8 @@ public class FixSimulatorSession extends WebSession {
         this.activeSessionId = sessionId;
         dirty();
     }
+
+    // ── Template capture flow ─────────────────────────────────────────────────
 
     /** Stores a raw FIX message to be parsed into a template on the next page load. */
     public void setPendingFixMessage(String raw) {

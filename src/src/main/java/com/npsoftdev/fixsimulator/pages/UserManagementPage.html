@@ -2,81 +2,51 @@
 <body>
 <wicket:extend>
 
-    <div class="page-header">
-        <h4><i class="bi bi-people me-2 text-primary"></i>User Management</h4>
-        <button class="btn btn-sm btn-success">
-            <i class="bi bi-person-plus me-1"></i>Add User
-        </button>
-    </div>
+<div class="page-header">
+    <h4><i class="bi bi-people me-2 text-primary"></i>User Management</h4>
+    <a wicket:id="addUserBtn" href="#" class="btn btn-sm btn-success">
+        <i class="bi bi-person-plus me-1"></i>Add User
+    </a>
+</div>
 
-    <div class="table-card">
+<!-- Feedback panel for page-level messages (delete errors, etc.) -->
+<div wicket:id="feedback" class="mb-2"></div>
+
+<div class="table-card">
+    <div wicket:id="listContainer">
         <div class="table-responsive">
             <table class="table table-sm table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
                         <th>Username</th>
                         <th>Full Name</th>
-                        <th>Role</th>
+                        <th>Roles</th>
                         <th>Email</th>
                         <th>Status</th>
-                        <th>Last Login</th>
+                        <th>Max Sessions</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td class="fw-semibold font-monospace">admin</td>
-                        <td>Administrator</td>
-                        <td><span class="badge bg-danger">Admin</span></td>
-                        <td>admin@npsoftdev.com</td>
-                        <td><span class="badge bg-success">Active</span></td>
-                        <td class="text-muted" style="font-size:0.8rem;">Just now</td>
-                        <td>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
-                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;" disabled>Delete</button>
-                            </div>
+                    <tr wicket:id="userList">
+                        <td class="fw-semibold font-monospace">
+                            <span wicket:id="username">-</span>
                         </td>
-                    </tr>
-                    <tr>
-                        <td class="fw-semibold font-monospace">trader1</td>
-                        <td>John Trader</td>
-                        <td><span class="badge bg-primary">Trader</span></td>
-                        <td>trader1@npsoftdev.com</td>
-                        <td><span class="badge bg-success">Active</span></td>
-                        <td class="text-muted" style="font-size:0.8rem;">1 hour ago</td>
+                        <td><span wicket:id="displayName">-</span></td>
+                        <td><span wicket:id="roles" class="text-muted">-</span></td>
+                        <td><span wicket:id="email" class="text-muted">-</span></td>
                         <td>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
-                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Delete</button>
-                            </div>
+                            <span wicket:id="status" class="badge bg-success">Active</span>
                         </td>
-                    </tr>
-                    <tr>
-                        <td class="fw-semibold font-monospace">viewer1</td>
-                        <td>Jane Viewer</td>
-                        <td><span class="badge bg-secondary">Viewer</span></td>
-                        <td>viewer1@npsoftdev.com</td>
-                        <td><span class="badge bg-success">Active</span></td>
-                        <td class="text-muted" style="font-size:0.8rem;">Yesterday</td>
+                        <td><span wicket:id="maxSessions" class="text-muted">Unlimited</span></td>
                         <td>
                             <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
-                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Delete</button>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="fw-semibold font-monospace">ops_user</td>
-                        <td>Operations Team</td>
-                        <td><span class="badge bg-info text-dark">Operator</span></td>
-                        <td>ops@npsoftdev.com</td>
-                        <td><span class="badge bg-warning text-dark">Suspended</span></td>
-                        <td class="text-muted" style="font-size:0.8rem;">3 days ago</td>
-                        <td>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-secondary" style="font-size:0.75rem;padding:1px 6px;">Edit</button>
-                                <button class="btn btn-xs btn-outline-danger" style="font-size:0.75rem;padding:1px 6px;">Delete</button>
+                                <a wicket:id="editBtn" href="#"
+                                   class="btn btn-xs btn-outline-secondary"
+                                   style="font-size:0.75rem;padding:2px 8px;">Edit</a>
+                                <a wicket:id="deleteBtn" href="#"
+                                   class="btn btn-xs btn-outline-danger"
+                                   style="font-size:0.75rem;padding:2px 8px;">Delete</a>
                             </div>
                         </td>
                     </tr>
@@ -84,6 +54,161 @@
             </table>
         </div>
     </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     ADD / EDIT USER MODAL
+     ══════════════════════════════════════════ -->
+<div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel"
+     aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+
+            <form wicket:id="userForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="userModalLabel">
+                        <i class="bi bi-person-gear me-2 text-primary"></i>
+                        <span wicket:id="modalTitle">User</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div wicket:id="formFeedback" class="mb-3"></div>
+
+                    <div class="row g-3">
+
+                        <!-- Username (new user) -->
+                        <div class="col-md-6" wicket:id="usernameEditRow">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Username <span class="text-danger">*</span>
+                            </label>
+                            <input wicket:id="username" type="text"
+                                   class="form-control form-control-sm"
+                                   placeholder="e.g. john.doe"
+                                   autocomplete="off"/>
+                            <div class="form-text">Letters, digits, _ - . only</div>
+                        </div>
+
+                        <!-- Username (editing — readonly) -->
+                        <div class="col-md-6" wicket:id="usernameReadonlyRow">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Username
+                            </label>
+                            <div class="form-control form-control-sm bg-body-secondary text-muted font-monospace"
+                                 wicket:id="usernameReadonly">-</div>
+                        </div>
+
+                        <!-- Display Name -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Display Name
+                            </label>
+                            <input wicket:id="displayName" type="text"
+                                   class="form-control form-control-sm"
+                                   placeholder="Full name"/>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Email
+                            </label>
+                            <input wicket:id="email" type="text"
+                                   class="form-control form-control-sm"
+                                   placeholder="user@example.com"/>
+                        </div>
+
+                        <!-- Password -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Password
+                                <span class="text-muted fw-normal"
+                                      style="font-size:0.78rem;">(leave blank to keep existing)</span>
+                            </label>
+                            <input wicket:id="password" type="password"
+                                   class="form-control form-control-sm"
+                                   autocomplete="new-password"
+                                   placeholder="Min. 8 characters"/>
+                        </div>
+
+                        <!-- Confirm Password -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Confirm Password
+                            </label>
+                            <input wicket:id="confirmPassword" type="password"
+                                   class="form-control form-control-sm"
+                                   autocomplete="new-password"
+                                   placeholder="Repeat password"/>
+                        </div>
+
+                        <!-- Roles -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Roles <span class="text-danger">*</span>
+                            </label>
+                            <div class="d-flex gap-4 mt-1">
+                                <div class="form-check">
+                                    <input wicket:id="roleAdmin" type="checkbox"
+                                           class="form-check-input" id="roleAdminCheck"/>
+                                    <label class="form-check-label" for="roleAdminCheck">
+                                        <span class="badge bg-danger me-1">Admin</span>
+                                        <span class="text-muted" style="font-size:0.78rem;">
+                                            — Manage users &amp; system logs
+                                        </span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input wicket:id="roleTester" type="checkbox"
+                                           class="form-check-input" id="roleTesterCheck"/>
+                                    <label class="form-check-label" for="roleTesterCheck">
+                                        <span class="badge bg-primary me-1">Tester</span>
+                                        <span class="text-muted" style="font-size:0.78rem;">
+                                            — Full FIX testing capabilities
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Active + Max Sessions -->
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                <input wicket:id="active" type="checkbox"
+                                       class="form-check-input" id="activeCheck"/>
+                                <label class="form-check-label fw-semibold"
+                                       style="font-size:0.85rem;" for="activeCheck">
+                                    Account Active
+                                </label>
+                                <div class="form-text">Inactive users cannot log in.</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                Max Concurrent Sessions
+                            </label>
+                            <input wicket:id="maxSessions" type="number" min="0"
+                                   class="form-control form-control-sm"/>
+                            <div class="form-text">0 = unlimited</div>
+                        </div>
+
+                    </div><!-- /row -->
+                </div><!-- /modal-body -->
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary"
+                            data-bs-dismiss="modal">Cancel</button>
+                    <button wicket:id="saveBtn" type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>Save User
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
 
 </wicket:extend>
 </body>

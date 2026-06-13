@@ -1,6 +1,8 @@
 package com.npsoftdev.fixsimulator.user;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -13,50 +15,70 @@ public final class User implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private final String  username;
-    private final String  displayName;
-    /** Bcrypt / plain-text hash. {@code null} means no password set. */
-    private final String  passwordHash;
-    private final String  role;
-    private final boolean active;
+    private final String       username;
+    private final String       displayName;
+    /** Bcrypt hash. {@code null} means no password set. */
+    private final String       passwordHash;
+    private final String       email;
+    private final List<String> roles;
+    private final boolean      active;
+    /** Maximum concurrent sessions. 0 = unlimited. */
+    private final int          maxSessions;
 
     private User(Builder b) {
         this.username     = Objects.requireNonNull(b.username, "username");
         this.displayName  = b.displayName != null ? b.displayName : b.username;
         this.passwordHash = b.passwordHash;
-        this.role         = b.role != null ? b.role : "OPERATOR";
+        this.email        = b.email;
+        this.roles        = b.roles != null
+                ? Collections.unmodifiableList(List.copyOf(b.roles))
+                : Collections.emptyList();
         this.active       = b.active;
+        this.maxSessions  = Math.max(0, b.maxSessions);
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
-    public String  username()     { return username; }
-    public String  displayName()  { return displayName; }
-    public String  passwordHash() { return passwordHash; }
-    public String  role()         { return role; }
-    public boolean isActive()     { return active; }
+    public String       username()     { return username; }
+    public String       displayName()  { return displayName; }
+    public String       passwordHash() { return passwordHash; }
+    public String       email()        { return email; }
+    public List<String> roles()        { return roles; }
+    public boolean      isActive()     { return active; }
+    /** Maximum concurrent sessions; {@code 0} means unlimited. */
+    public int          maxSessions()  { return maxSessions; }
+
+    public boolean hasRole(String role) {
+        return roles.contains(role);
+    }
 
     // ── Builder ───────────────────────────────────────────────────────────────
 
-    public static Builder builder()  { return new Builder(); }
-    public Builder        toBuilder() {
+    public static Builder builder()   { return new Builder(); }
+
+    public Builder toBuilder() {
         return new Builder()
                 .username(username).displayName(displayName)
-                .passwordHash(passwordHash).role(role).active(active);
+                .passwordHash(passwordHash).email(email)
+                .roles(roles).active(active).maxSessions(maxSessions);
     }
 
     public static final class Builder {
-        private String  username;
-        private String  displayName;
-        private String  passwordHash;
-        private String  role   = "OPERATOR";
-        private boolean active = true;
+        private String       username;
+        private String       displayName;
+        private String       passwordHash;
+        private String       email;
+        private List<String> roles       = Collections.emptyList();
+        private boolean      active      = true;
+        private int          maxSessions = 0;
 
-        public Builder username(String v)     { this.username     = v; return this; }
-        public Builder displayName(String v)  { this.displayName  = v; return this; }
-        public Builder passwordHash(String v) { this.passwordHash = v; return this; }
-        public Builder role(String v)         { this.role         = v; return this; }
-        public Builder active(boolean v)      { this.active       = v; return this; }
+        public Builder username(String v)       { this.username     = v; return this; }
+        public Builder displayName(String v)    { this.displayName  = v; return this; }
+        public Builder passwordHash(String v)   { this.passwordHash = v; return this; }
+        public Builder email(String v)          { this.email        = v; return this; }
+        public Builder roles(List<String> v)    { this.roles        = v; return this; }
+        public Builder active(boolean v)        { this.active       = v; return this; }
+        public Builder maxSessions(int v)       { this.maxSessions  = v; return this; }
 
         public User build() { return new User(this); }
     }
@@ -71,5 +93,7 @@ public final class User implements Serializable {
     }
 
     @Override public int    hashCode() { return username.hashCode(); }
-    @Override public String toString()  { return "User{username=" + username + ", role=" + role + "}"; }
+    @Override public String toString()  {
+        return "User{username=" + username + ", roles=" + roles + "}";
+    }
 }

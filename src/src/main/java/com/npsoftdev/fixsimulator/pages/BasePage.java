@@ -7,6 +7,9 @@ import com.npsoftdev.fixsimulator.plugin.PluginRegistry;
 import com.npsoftdev.fixsimulator.plugin.SimulatorPlugin;
 import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.service.ConnectionService.SessionDetails;
+import com.npsoftdev.fixsimulator.user.AuthService;
+import com.npsoftdev.fixsimulator.user.Permission;
+import com.npsoftdev.fixsimulator.user.User;
 import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
@@ -23,6 +26,7 @@ import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.form.NumberTextField;
 import org.apache.wicket.markup.html.link.BookmarkablePageLink;
+import org.apache.wicket.markup.html.link.Link;
 import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.ListView;
 import org.apache.wicket.model.CompoundPropertyModel;
@@ -44,19 +48,46 @@ public abstract class BasePage extends WebPage {
         SeqMgmtModel seqModel = new SeqMgmtModel();
 
         // ── Topbar container — refreshed only when the active session switches ─
-        // (avoids tearing down Bootstrap dropdown state on every poll tick)
         WebMarkupContainer topbarNav = new WebMarkupContainer("topbarNav");
         topbarNav.setOutputMarkupId(true);
         add(topbarNav);
 
-        // ── Status area — polled every 2 s to pick up async connect/disconnect
-        // handshakes and live sequence-number changes without a manual refresh ──
+        // ── User menu (must be children of topbarNav to match HTML hierarchy) ──
+        topbarNav.add(new Label("currentUsername", (IModel<String>) () -> {
+            User u = FixSimulatorSession.get().getAuthenticatedUser();
+            return u != null ? u.username() : "?";
+        }));
+        topbarNav.add(new Label("currentUserDisplayName", (IModel<String>) () -> {
+            User u = FixSimulatorSession.get().getAuthenticatedUser();
+            return u != null ? u.displayName() : "";
+        }));
+        topbarNav.add(new Label("userRolesBadge", (IModel<String>) () -> {
+            User u = FixSimulatorSession.get().getAuthenticatedUser();
+            return u != null && !u.roles().isEmpty() ? String.join(", ", u.roles()) : "No roles";
+        }));
+        topbarNav.add(new Link<Void>("signOutLink") {
+            @Override
+            public void onClick() {
+                FixSimulatorSession sess = FixSimulatorSession.get();
+                User user = sess.getAuthenticatedUser();
+                if (user != null) {
+                    AuthService auth = app().getAuthService();
+                    if (auth != null) {
+                        auth.unregisterSession(user.username(), sess.getId());
+                    }
+                }
+                sess.signOut();
+                sess.invalidate();
+                setResponsePage(LoginPage.class);
+            }
+        });
+
+        // ── Status area — polled every 2 s ────────────────────────────────────
         WebMarkupContainer connStatusArea = new WebMarkupContainer("connStatusArea");
         connStatusArea.setOutputMarkupId(true);
         connStatusArea.add(new AjaxSelfUpdatingTimerBehavior(Duration.ofSeconds(2)));
         topbarNav.add(connStatusArea);
 
-        // No-session placeholder — visible when no active session is selected
         WebMarkupContainer noSessionBox = new WebMarkupContainer("noSessionBox") {
             @Override
             protected void onConfigure() {
@@ -66,7 +97,6 @@ public abstract class BasePage extends WebPage {
         };
         connStatusArea.add(noSessionBox);
 
-        // Conn-info box — visible when an active session is selected and known
         WebMarkupContainer connInfoBox = new WebMarkupContainer("connInfoBox") {
             @Override
             protected void onConfigure() {
@@ -76,14 +106,12 @@ public abstract class BasePage extends WebPage {
         };
         connStatusArea.add(connInfoBox);
 
-        // Connection name
         connInfoBox.add(new Label("connName", (IModel<String>) () -> {
             String sid = activeId();
             ConnectionService cs = connSvc();
             return sid != null && cs != null ? cs.getSessionName(sid) : "";
         }));
 
-        // Status badge — text + dynamic CSS class
         Label statusLabel = new Label("connStatus", (IModel<String>) () -> {
             String sid = activeId();
             ConnectionService cs = connSvc();
@@ -93,7 +121,6 @@ public abstract class BasePage extends WebPage {
                 statusBadgeCss(activeStatus())));
         connInfoBox.add(statusLabel);
 
-        // Sequence numbers — updated every 2 s by the timer on connStatusArea
         connInfoBox.add(new Label("txSeq", (IModel<String>) () -> {
             String sid = activeId();
             ConnectionService cs = connSvc();
@@ -105,9 +132,6 @@ public abstract class BasePage extends WebPage {
             return sid != null && cs != null ? String.valueOf(cs.getRxSequence(sid)) : "-";
         }));
 
-        // Connect button — visible when session is NOT connected.
-        // Refreshes connStatusArea immediately; the timer then picks up the new
-        // CONNECTED state once the FIX Logon handshake completes (~1–2 s).
         connInfoBox.add(new AjaxLink<Void>("connectBtn") {
             @Override
             public void onClick(AjaxRequestTarget target) {
@@ -124,7 +148,6 @@ public abstract class BasePage extends WebPage {
             }
         });
 
-        // Disconnect button — visible when session IS connected
         connInfoBox.add(new AjaxLink<Void>("disconnectBtn") {
             @Override
             public void onClick(AjaxRequestTarget target) {
@@ -141,14 +164,12 @@ public abstract class BasePage extends WebPage {
             }
         });
 
-        // Seq Mgmt button — only available when disconnected
         Form<SeqMgmtModel> seqForm = buildSeqMgmtForm(seqModel, connStatusArea);
         add(seqForm);
 
         connInfoBox.add(new AjaxLink<Void>("manageSeqBtn") {
             @Override
             public void onClick(AjaxRequestTarget target) {
-                // Pre-populate form with current sequence numbers
                 String sid = activeId();
                 ConnectionService cs = connSvc();
                 if (sid != null && cs != null) {
@@ -168,8 +189,6 @@ public abstract class BasePage extends WebPage {
         });
 
         // ── Switch Connection dropdown ─────────────────────────────────────────
-        // Lives in topbarNav (outside connStatusArea) so the Bootstrap dropdown
-        // is not disrupted by the 2-second polling timer.
         topbarNav.add(new ListView<SessionDetails>("switchConnectionList",
                 new LoadableDetachableModel<>() {
                     @Override
@@ -188,10 +207,7 @@ public abstract class BasePage extends WebPage {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
                         FixSimulatorSession.get().setActiveSessionId(sd.sessionId());
-                        // Refresh whole topbar so the active indicator in the dropdown
-                        // and the status area both update together
                         target.add(topbarNav);
-                        // Close Bootstrap dropdown
                         target.appendJavaScript(
                                 "document.querySelectorAll('.dropdown-menu.show').forEach(function(m){" +
                                 "  m.classList.remove('show');" +
@@ -217,9 +233,8 @@ public abstract class BasePage extends WebPage {
             }
         });
 
-        // ── Sidebar navigation (registry-driven) ──────────────────────────────
-        PluginRegistry registry =
-                ((FixSimulatorApplication) getApplication()).getPluginRegistry();
+        // ── Sidebar navigation (registry-driven, permission-filtered) ──────────
+        PluginRegistry registry = app().getPluginRegistry();
         add(buildNavList("overviewNav",   registry.getPluginsBySection(NavSection.OVERVIEW)));
         add(buildNavList("monitoringNav", registry.getPluginsBySection(NavSection.MONITORING)));
         add(buildNavList("adminNav",      registry.getPluginsBySection(NavSection.ADMIN)));
@@ -229,27 +244,20 @@ public abstract class BasePage extends WebPage {
     public void renderHead(IHeaderResponse response) {
         super.renderHead(response);
 
-        // Bootstrap 5 CSS
         response.render(CssUrlReferenceHeaderItem.forUrl(
                 "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"));
-
-        // Bootstrap Icons CSS
         response.render(CssUrlReferenceHeaderItem.forUrl(
                 "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"));
-
-        // App custom styles (co-located with BasePage)
         response.render(CssReferenceHeaderItem.forReference(
                 new PackageResourceReference(BasePage.class, "app.css")));
-
-        // Bootstrap 5 JS bundle (includes Popper)
         response.render(JavaScriptUrlReferenceHeaderItem.forUrl(
                 "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"));
     }
 
-    // ── Seq management form (inside modal) ───────────────────────────────────
+    // ── Seq management form ───────────────────────────────────────────────────
 
     private Form<SeqMgmtModel> buildSeqMgmtForm(SeqMgmtModel model,
-                                                 WebMarkupContainer connStatusArea) {
+                                                  WebMarkupContainer connStatusArea) {
         Form<SeqMgmtModel> form = new Form<>("seqForm", new CompoundPropertyModel<>(model));
         form.setOutputMarkupId(true);
 
@@ -281,9 +289,6 @@ public abstract class BasePage extends WebPage {
 
     // ── Nav list builder ─────────────────────────────────────────────────────
 
-    /**
-     * Lightweight, fully-serializable snapshot of a plugin's nav properties.
-     */
     private record NavEntry(
             String label,
             String iconClass,
@@ -291,7 +296,17 @@ public abstract class BasePage extends WebPage {
     ) implements Serializable {}
 
     private ListView<NavEntry> buildNavList(String id, List<SimulatorPlugin> plugins) {
+        User currentUser  = FixSimulatorSession.get().getAuthenticatedUser();
+        AuthService auth  = app().getAuthService();
+
         List<NavEntry> entries = plugins.stream()
+                .filter(p -> p.getPageClass() != null)
+                .filter(p -> {
+                    Permission req = PagePermissions.forPage(p.getPageClass());
+                    if (req == null) return true;   // no restriction
+                    if (auth == null) return false;  // auth not yet ready
+                    return auth.hasPermission(currentUser, req);
+                })
                 .map(p -> new NavEntry(p.getLabel(), p.getIconClass(), p.getPageClass()))
                 .toList();
 
@@ -319,30 +334,24 @@ public abstract class BasePage extends WebPage {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /**
-     * Returns the {@link ConnectionService} fresh from the application on every call.
-     * Never capture this in a closure — always call it inline.
-     */
-    private ConnectionService connSvc() {
-        return ((FixSimulatorApplication) Application.get()).getConnectionService();
+    protected FixSimulatorApplication app() {
+        return (FixSimulatorApplication) Application.get();
     }
 
-    /** Returns the active session ID from the Wicket session. */
+    private ConnectionService connSvc() {
+        return app().getConnectionService();
+    }
+
     private static String activeId() {
         return FixSimulatorSession.get().getActiveSessionId();
     }
 
-    /** Returns the connection status of the active session, or an empty string if none. */
     private String activeStatus() {
         String sid = activeId();
         ConnectionService cs = connSvc();
         return (sid != null && cs != null) ? cs.getStatus(sid) : "";
     }
 
-    /**
-     * Returns {@code true} if an active session is selected and the service knows about it
-     * (i.e. it has not been deleted).
-     */
     private boolean isActiveSessionValid() {
         String sid = activeId();
         if (sid == null) return false;

@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,19 +17,17 @@ import java.util.Optional;
  * YAML-backed {@link UserRepository}.
  *
  * <p>User accounts are persisted to {@code users.yaml} inside the configured
- * data directory. Passwords are stored as supplied (callers are responsible
- * for hashing before passing to {@link #save}).</p>
+ * data directory.  The {@code role} (singular) field from the old schema is
+ * automatically migrated to {@code roles} (list) on load.</p>
  *
  * <h3>YAML format</h3>
  * <pre>{@code
  * users:
  *   - username: alice
  *     displayName: Alice Smith
- *     role: ADMIN
- *     active: true
- *   - username: bob
- *     displayName: Bob Jones
- *     role: OPERATOR
+ *     email: alice@example.com
+ *     roles: [Admin, Tester]
+ *     maxSessions: 0
  *     active: true
  * }</pre>
  */
@@ -40,7 +39,6 @@ public class YamlUserRepository implements UserRepository {
     private static final String FILENAME = "users.yaml";
 
     private final YamlPersistenceService yaml;
-
     private final Map<String, User> byUsername = new LinkedHashMap<>();
 
     public YamlUserRepository(YamlPersistenceService yaml) {
@@ -103,22 +101,36 @@ public class YamlUserRepository implements UserRepository {
     }
 
     private static User fromDto(UserDto d) {
+        // Migrate old single-role field to roles list
+        List<String> roles;
+        if (d.roles != null && !d.roles.isEmpty()) {
+            roles = d.roles;
+        } else if (d.role != null && !d.role.isBlank()) {
+            roles = List.of(d.role);
+        } else {
+            roles = Collections.emptyList();
+        }
+
         return User.builder()
                 .username(d.username)
                 .displayName(d.displayName)
                 .passwordHash(d.passwordHash)
-                .role(d.role != null ? d.role : "OPERATOR")
+                .email(d.email)
+                .roles(roles)
                 .active(d.active == null || d.active)
+                .maxSessions(d.maxSessions != null ? d.maxSessions : 0)
                 .build();
     }
 
     private static UserDto toDto(User u) {
-        UserDto d      = new UserDto();
-        d.username     = u.username();
-        d.displayName  = u.displayName();
-        d.passwordHash = u.passwordHash();
-        d.role         = u.role();
-        d.active       = u.isActive() ? null : false; // omit true (NON_NULL default = active)
+        UserDto d        = new UserDto();
+        d.username       = u.username();
+        d.displayName    = u.displayName();
+        d.passwordHash   = u.passwordHash();
+        d.email          = u.email();
+        d.roles          = u.roles().isEmpty() ? null : new ArrayList<>(u.roles());
+        d.active         = u.isActive() ? null : false;  // omit true (cleaner YAML)
+        d.maxSessions    = u.maxSessions() == 0 ? null : u.maxSessions();
         return d;
     }
 
@@ -129,11 +141,16 @@ public class YamlUserRepository implements UserRepository {
     }
 
     static class UserDto {
-        public String  username;
-        public String  displayName;
-        public String  passwordHash;
-        public String  role;
+        public String       username;
+        public String       displayName;
+        public String       passwordHash;
+        public String       email;
+        public List<String> roles;
+        /** Legacy single-role field — migrated to {@code roles} on load. */
+        public String       role;
         /** Null means active = true (omitted in YAML for brevity). */
-        public Boolean active;
+        public Boolean      active;
+        /** Null means 0 = unlimited. */
+        public Integer      maxSessions;
     }
 }

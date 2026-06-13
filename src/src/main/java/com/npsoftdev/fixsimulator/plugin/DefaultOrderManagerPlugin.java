@@ -17,11 +17,17 @@ import com.npsoftdev.fixsimulator.persistence.YamlPersistenceService;
 import com.npsoftdev.fixsimulator.template.YamlDynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.YamlTemplateRepository;
 import com.npsoftdev.fixsimulator.template.YamlValueMappingService;
+import com.npsoftdev.fixsimulator.user.DefaultAuthService;
+import com.npsoftdev.fixsimulator.user.RoleRegistry;
+import com.npsoftdev.fixsimulator.user.User;
 import com.npsoftdev.fixsimulator.user.UserRepository;
 import com.npsoftdev.fixsimulator.user.YamlUserRepository;
 import com.npsoftdev.fixsimulator.template.PlaceholderResolver;
 
 import java.nio.file.Path;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.npsoftdev.fixsimulator.template.PlaceholderType;
 import com.npsoftdev.fixsimulator.template.TemplateRepository;
 import com.npsoftdev.fixsimulator.template.TemplateScope;
@@ -65,6 +71,7 @@ import quickfix.field.TransactTime;
 public class DefaultOrderManagerPlugin implements SimulatorPlugin {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(DefaultOrderManagerPlugin.class);
 
     // ── Nav ───────────────────────────────────────────────────────────────────
     private final String id;
@@ -129,6 +136,10 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         valueMappingService  = new YamlValueMappingService(yamlService);
         dynamicValueRegistry = new YamlDynamicValueRegistry(yamlService);
         userRepository       = new YamlUserRepository(yamlService);
+        RoleRegistry roleRegistry = new RoleRegistry();
+        seedDefaultAdmin(userRepository, roleRegistry);
+        DefaultAuthService authService = new DefaultAuthService(userRepository, roleRegistry);
+
         messageBuilder       = new DefaultFixMessageBuilder(
                 placeholderResolver, valueMappingService, dynamicValueRegistry);
         templateService      = new DefaultTemplateService(
@@ -145,6 +156,29 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         app.setValueMappingService(valueMappingService);
         app.setDynamicValueRegistry(dynamicValueRegistry);
         app.setUserRepository(userRepository);
+        app.setAuthService(authService);
+    }
+
+    /**
+     * Creates the default admin user on first startup when no users exist.
+     * Username: {@code admin}, password: {@code admin}.
+     * The user is assigned both the Admin and Tester roles.
+     */
+    private static void seedDefaultAdmin(UserRepository repo, RoleRegistry roles) {
+        if (!repo.findAll().isEmpty()) return;
+        String hash = DefaultAuthService.hashPassword("admin");
+        User admin = User.builder()
+                .username("admin")
+                .displayName("Administrator")
+                .email("admin@fixsimulator.local")
+                .passwordHash(hash)
+                .roles(List.of(RoleRegistry.ADMIN, RoleRegistry.TESTER))
+                .active(true)
+                .maxSessions(0)
+                .build();
+        repo.save(admin);
+        log.info("Created default admin user (username: admin, password: admin) — "
+                + "change this password immediately after first login.");
     }
 
     /**
