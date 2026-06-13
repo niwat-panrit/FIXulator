@@ -4,6 +4,9 @@ import com.npsoftdev.fixsimulator.service.ConnectionService;
 import quickfix.SessionID;
 import quickfix.SessionSettings;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,6 +32,7 @@ import java.util.function.Consumer;
 public class GatewayConnectionService implements ConnectionService, Serializable {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(GatewayConnectionService.class);
 
     // ── Internal state per session ────────────────────────────────────────────
 
@@ -115,6 +119,7 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         SessionState state = new SessionState(sid);
         populateFromSettings(state, sid);
         states.put(sid.toString(), state);
+        log.info("FIX session registered: {} ({}, {})", sid, state.connectionType, state.hostPort);
     }
 
     public void onLogon(SessionID sid) {
@@ -123,11 +128,13 @@ public class GatewayConnectionService implements ConnectionService, Serializable
             populateFromSettings(s, sid);
             return s;
         }).status = SessionStatus.CONNECTED;
+        log.info("FIX session CONNECTED: {}", sid);
     }
 
     public void onLogout(SessionID sid) {
         SessionState s = states.get(sid.toString());
         if (s != null) s.status = SessionStatus.DISCONNECTED;
+        log.info("FIX session DISCONNECTED: {}", sid);
     }
 
     // ── ConnectionService ─────────────────────────────────────────────────────
@@ -179,12 +186,14 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     @Override
     public void connect(String sessionId) {
+        log.info("User-initiated CONNECT for session: {}", sessionId);
         enabledSessions.add(sessionId);
         resolve(sessionId).ifPresent(session::logon);
     }
 
     @Override
     public void disconnect(String sessionId) {
+        log.info("User-initiated DISCONNECT for session: {}", sessionId);
         enabledSessions.remove(sessionId);
         resolve(sessionId).ifPresent(session::logout);
     }
@@ -205,6 +214,7 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     @Override
     public void setTxSequence(String sessionId, int nextNum) {
+        log.info("Setting TX sequence for session {} → nextSenderNum={}", sessionId, nextNum);
         resolve(sessionId).ifPresent(sid -> {
             try {
                 session.setNextSenderNum(sid, nextNum);
@@ -216,6 +226,7 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     @Override
     public void setRxSequence(String sessionId, int nextNum) {
+        log.info("Setting RX sequence for session {} → nextTargetNum={}", sessionId, nextNum);
         resolve(sessionId).ifPresent(sid -> {
             try {
                 session.setNextTargetNum(sid, nextNum);
@@ -227,11 +238,15 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     @Override
     public void addSession(NewSessionRequest request) {
+        log.info("Adding session: {}→{} {}:{}", request.senderCompID(), request.targetCompID(),
+                request.host(), request.port());
         sessionAdder.accept(request);
     }
 
     @Override
     public void updateSession(String sessionId, NewSessionRequest request) {
+        log.info("Updating session {}: {}→{} {}:{}", sessionId,
+                request.senderCompID(), request.targetCompID(), request.host(), request.port());
         // Remove stale in-memory state so the restarted initiator registers fresh entries.
         states.remove(sessionId);
         sessionIDs.remove(sessionId);
@@ -241,6 +256,7 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     @Override
     public void deleteSession(String sessionId) {
+        log.info("Deleting session: {}", sessionId);
         // Disconnect first so a clean FIX Logout is sent before the session is torn down.
         if ("CONNECTED".equals(getStatus(sessionId))) {
             disconnect(sessionId);
@@ -260,6 +276,7 @@ public class GatewayConnectionService implements ConnectionService, Serializable
 
     @Override
     public void resetSequence(String sessionId) {
+        log.info("Resetting sequence numbers for session: {}", sessionId);
         resolve(sessionId).ifPresent(sid -> {
             try {
                 session.reset(sid);

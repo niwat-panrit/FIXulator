@@ -7,6 +7,9 @@ import quickfix.field.*;
 import quickfix.fix44.NewOrderSingle;
 import quickfix.fix44.OrderCancelRequest;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -34,6 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class GatewayOrderService implements OrderService, Serializable {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(GatewayOrderService.class);
 
     /** Shared session-ID registry populated by the gateway plugin. */
     private final Map<String, SessionID> sessionIDs;
@@ -94,11 +98,17 @@ public class GatewayOrderService implements OrderService, Serializable {
                               .put(clOrdId, flat);
                     snapshots.computeIfAbsent(key, k -> new ConcurrentHashMap<>())
                              .put(clOrdId, MessageSnapshot.capture(message));
+                    log.info("→ NewOrderSingle [{}] clOrdId={} symbol={} side={} qty={} price={}",
+                            sessionID, clOrdId,
+                            flat.get(Symbol.FIELD), flat.get(Side.FIELD),
+                            flat.get(OrderQty.FIELD), flat.get(Price.FIELD));
                 }
 
             } else if (MsgType.ORDER_CANCEL_REPLACE_REQUEST.equals(msgType)) {
                 String newClOrdId  = message.getString(ClOrdID.FIELD);
                 String origClOrdId = message.getString(OrigClOrdID.FIELD);
+                log.info("→ OrderCancelReplaceRequest [{}] clOrdId={} origClOrdId={}",
+                        sessionID, newClOrdId, origClOrdId);
                 Map<Integer, String> existing = findByClOrdId(key, origClOrdId);
                 if (existing != null) {
                     existing.put(ClOrdID.FIELD,  newClOrdId);
@@ -121,6 +131,8 @@ public class GatewayOrderService implements OrderService, Serializable {
             } else if (MsgType.ORDER_CANCEL_REQUEST.equals(msgType)) {
                 String newClOrdId  = message.getString(ClOrdID.FIELD);
                 String origClOrdId = message.getString(OrigClOrdID.FIELD);
+                log.info("→ OrderCancelRequest [{}] clOrdId={} origClOrdId={}",
+                        sessionID, newClOrdId, origClOrdId);
                 Map<Integer, String> existing = findByClOrdId(key, origClOrdId);
                 if (existing != null) {
                     existing.put(ClOrdID.FIELD,  newClOrdId);
@@ -173,11 +185,17 @@ public class GatewayOrderService implements OrderService, Serializable {
                     copyIfPresent(message, order, Symbol.FIELD);
                     copyIfPresent(message, order, Side.FIELD);
                 }
+                log.info("← ExecutionReport [{}] clOrdId={} ordStatus={} execType={} cumQty={} leavesQty={}",
+                        sessionID, clOrdId,
+                        order.get(OrdStatus.FIELD), execType,
+                        order.get(CumQty.FIELD), order.get(LeavesQty.FIELD));
 
             } else if (MsgType.ORDER_CANCEL_REJECT.equals(msgType)) {
                 // Restore the exchange's current status (overrides our optimistic PendingCancel/Replace)
                 copyIfPresent(message, order, OrdStatus.FIELD);
                 copyIfPresent(message, order, Text.FIELD);
+                log.info("← OrderCancelReject [{}] clOrdId={} ordStatus={} text={}",
+                        sessionID, clOrdId, order.get(OrdStatus.FIELD), order.get(Text.FIELD));
             }
         } catch (FieldNotFound ignored) {}
     }

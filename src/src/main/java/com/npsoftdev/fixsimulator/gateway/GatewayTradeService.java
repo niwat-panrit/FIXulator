@@ -1,6 +1,8 @@
 package com.npsoftdev.fixsimulator.gateway;
 
 import com.npsoftdev.fixsimulator.service.TradeService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import quickfix.Field;
 import quickfix.FieldNotFound;
 import quickfix.Message;
@@ -25,6 +27,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class GatewayTradeService implements TradeService, Serializable {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(GatewayTradeService.class);
 
     /** keyed by session-ID string; inner list is newest-first */
     private final Map<String, CopyOnWriteArrayList<Map<Integer, String>>> trades =
@@ -45,6 +48,12 @@ public class GatewayTradeService implements TradeService, Serializable {
 
                 trades.computeIfAbsent(sessionID.toString(), k -> new CopyOnWriteArrayList<>())
                       .add(0, fields);
+                log.info("← Trade fill [{}] execType={} execId={} clOrdId={} lastQty={} lastPx={}",
+                        sessionID, execType,
+                        fields.get(ExecID.FIELD),
+                        fields.get(quickfix.field.ClOrdID.FIELD),
+                        fields.get(quickfix.field.LastQty.FIELD),
+                        fields.get(quickfix.field.LastPx.FIELD));
             }
         } catch (FieldNotFound ignored) {}
     }

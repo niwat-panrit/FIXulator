@@ -11,6 +11,9 @@ import quickfix.*;
 import quickfix.Dictionary;
 import quickfix.field.MsgType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Field;
@@ -48,6 +51,7 @@ import java.util.function.Consumer;
 public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(DefaultFixGatewayPlugin.class);
 
     // ── Nav ──────────────────────────────────────────────────────────────────
     private final String id;
@@ -189,23 +193,29 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     public void onCreate(SessionID sessionID) {
         sessionIDs.put(sessionID.toString(), sessionID);
         if (connectionService != null) connectionService.onSessionCreated(sessionID);
+        log.info("FIX session created: {}", sessionID);
     }
 
     @Override
     public void onLogon(SessionID sessionID) {
         sessionIDs.put(sessionID.toString(), sessionID);
         if (connectionService != null) connectionService.onLogon(sessionID);
+        log.info("FIX session LOGON (connected): {}", sessionID);
     }
 
     @Override
     public void onLogout(SessionID sessionID) {
         if (connectionService != null) connectionService.onLogout(sessionID);
+        log.info("FIX session LOGOUT (disconnected): {}", sessionID);
     }
 
     @Override
     public void toAdmin(Message message, SessionID sessionID) {
         if (messageLogService != null)
             messageLogService.record(sessionID, MessageLogService.Direction.SENT, message);
+        // Admin messages (Heartbeat, Logon, Logout, ResendRequest, etc.) logged at DEBUG
+        // to avoid flooding the log; session lifecycle is already logged in onLogon/onLogout.
+        log.debug("→ ADMIN [{}] type={}", sessionID, msgType(message));
     }
 
     @Override
@@ -213,12 +223,16 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             throws FieldNotFound, IncorrectDataFormat, IncorrectTagValue, RejectLogon {
         if (messageLogService != null)
             messageLogService.record(sessionID, MessageLogService.Direction.RECEIVED, message);
+        log.debug("← ADMIN [{}] type={}", sessionID, msgType(message));
     }
 
     @Override
     public void toApp(Message message, SessionID sessionID) throws DoNotSend {
         if (messageLogService != null)
             messageLogService.record(sessionID, MessageLogService.Direction.SENT, message);
+        String type = msgType(message);
+        log.info("→ FIX SENT     [{}] type={} ({})", sessionID, type, msgTypeName(type));
+        log.debug("→ FIX SENT     [{}] raw={}", sessionID, message);
         publishOutbound(sessionID, message);
     }
 
@@ -227,6 +241,9 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             throws FieldNotFound, IncorrectDataFormat, IncorrectTagValue, UnsupportedMessageType {
         if (messageLogService != null)
             messageLogService.record(sessionID, MessageLogService.Direction.RECEIVED, message);
+        String type = msgType(message);
+        log.info("← FIX RECEIVED [{}] type={} ({})", sessionID, type, msgTypeName(type));
+        log.debug("← FIX RECEIVED [{}] raw={}", sessionID, message);
         publishInbound(sessionID, message);
     }
 
@@ -240,6 +257,8 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req) {
 
         SessionID sid = new SessionID(req.beginString(), req.senderCompID(), req.targetCompID());
+        log.info("Adding FIX session: {} ({}:{}, heartbeat={}s)",
+                sid, req.host(), req.port(), req.heartbeatSecs());
 
         // Register in master settings for persistence.
         try {
@@ -268,6 +287,8 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             String oldSessionId,
             com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req) {
 
+        log.info("Updating FIX session: {} → {}:{} {}→{}",
+                oldSessionId, req.senderCompID(), req.targetCompID(), req.host(), req.port());
         // Stop only the initiator for the old session — others are untouched.
         Initiator old = sessionInitiators.remove(oldSessionId);
         if (old != null) old.stop(true);
@@ -308,6 +329,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
      */
     private synchronized void deleteSessionInternal(String sessionId) {
 
+        log.info("Deleting FIX session: {}", sessionId);
         // Stop only this session's initiator — others are untouched.
         Initiator init = sessionInitiators.remove(sessionId);
         if (init != null) {
@@ -344,6 +366,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     private void startSessionInitiator(SessionID sid, SessionSettings perSessionSettings)
             throws ConfigError {
 
+        log.info("Starting FIX initiator for session: {}", sid);
         Initiator init = new SocketInitiator(
                 this,
                 new MemoryStoreFactory(),
@@ -492,7 +515,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
             Files.writeString(Paths.get(configFilePath), sb.toString());
         } catch (IOException e) {
-            System.err.println("[FIX] Failed to persist session config: " + e.getMessage());
+            log.error("Failed to persist session config to {}: {}", configFilePath, e.getMessage(), e);
         }
     }
 
@@ -584,6 +607,33 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /** Extracts MsgType (tag 35) from a FIX message; returns "?" on any error. */
+    private static String msgType(Message message) {
+        try { return message.getHeader().getString(MsgType.FIELD); } catch (Exception e) { return "?"; }
+    }
+
+    /**
+     * Maps a FIX MsgType string to a human-readable name for logging.
+     * Only the most common types are listed; anything else returns the raw type value.
+     */
+    private static String msgTypeName(String type) {
+        return switch (type) {
+            case MsgType.HEARTBEAT                      -> "Heartbeat";
+            case MsgType.LOGON                          -> "Logon";
+            case MsgType.LOGOUT                         -> "Logout";
+            case MsgType.RESEND_REQUEST                 -> "ResendRequest";
+            case MsgType.REJECT                         -> "Reject";
+            case MsgType.SEQUENCE_RESET                 -> "SequenceReset";
+            case MsgType.TEST_REQUEST                   -> "TestRequest";
+            case MsgType.ORDER_SINGLE                   -> "NewOrderSingle";
+            case MsgType.ORDER_CANCEL_REQUEST           -> "OrderCancelRequest";
+            case MsgType.ORDER_CANCEL_REPLACE_REQUEST   -> "OrderCancelReplaceRequest";
+            case MsgType.EXECUTION_REPORT               -> "ExecutionReport";
+            case MsgType.ORDER_CANCEL_REJECT            -> "OrderCancelReject";
+            default                                     -> type;
+        };
+    }
 
     private void publishOutbound(SessionID sessionID, Message message) {
         messageListeners.forEach(l -> l.onOutbound(sessionID, message));

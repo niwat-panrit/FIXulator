@@ -31,11 +31,17 @@
         </encoder>
     </appender>
 
-    <!-- Suppress noisy third-party libraries; they only reach the log at WARN+ -->
-    <logger name="quickfix"          level="WARN"/>
-    <logger name="quickfixj"         level="WARN"/>
-    <logger name="org.eclipse.jetty" level="WARN"/>
-    <logger name="org.apache.wicket" level="WARN"/>
+    <!-- Infrastructure noise: only surface warnings and above -->
+    <logger name="org.eclipse.jetty"  level="WARN"/>
+    <logger name="org.apache.wicket"  level="WARN"/>
+
+    <!-- QuickFIX/J session events (logon, logout, reconnects, seq resets) — keep at INFO -->
+    <logger name="quickfixj.event"    level="INFO"/>
+    <!-- QuickFIX/J per-message raw logs are DEBUG — silenced at root INFO level;
+         enable individually when raw protocol tracing is needed -->
+    <logger name="quickfixj.msg"      level="DEBUG"/>
+    <!-- QuickFIX/J internals -->
+    <logger name="quickfix"           level="WARN"/>
 
     <!-- Our application code -->
     <logger name="com.npsoftdev" level="INFO"/>

@@ -1,11 +1,14 @@
 package com.npsoftdev.fixsimulator.pages;
 
 import com.npsoftdev.fixsimulator.FixSimulatorApplication;
+import com.npsoftdev.fixsimulator.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest;
 import com.npsoftdev.fixsimulator.service.ConnectionService.SessionDetails;
 import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.wicket.markup.head.IHeaderResponse;
 import org.apache.wicket.markup.head.OnDomReadyHeaderItem;
 import org.apache.wicket.ajax.AjaxRequestTarget;
@@ -43,6 +46,8 @@ import java.util.List;
  * transitively holds).</p>
  */
 public class ConnectionManagementPage extends BasePage {
+
+    private static final Logger log = LoggerFactory.getLogger(ConnectionManagementPage.class);
 
     public ConnectionManagementPage() {
         super();
@@ -129,6 +134,8 @@ public class ConnectionManagementPage extends BasePage {
                 item.add(new Link<Void>("connectLink") {
                     @Override
                     public void onClick() {
+                        log.info("User '{}' clicked Connect for session: {}",
+                                currentUser(), s.sessionId());
                         ConnectionService cs = connSvc();
                         if (cs != null) cs.connect(s.sessionId());
                     }
@@ -143,6 +150,8 @@ public class ConnectionManagementPage extends BasePage {
                 item.add(new Link<Void>("disconnectLink") {
                     @Override
                     public void onClick() {
+                        log.info("User '{}' clicked Disconnect for session: {}",
+                                currentUser(), s.sessionId());
                         ConnectionService cs = connSvc();
                         if (cs != null) cs.disconnect(s.sessionId());
                     }
@@ -157,6 +166,8 @@ public class ConnectionManagementPage extends BasePage {
                 item.add(new Link<Void>("resetSeqLink") {
                     @Override
                     public void onClick() {
+                        log.info("User '{}' reset sequence numbers for session: {}",
+                                currentUser(), s.sessionId());
                         ConnectionService cs = connSvc();
                         if (cs != null) cs.resetSequence(s.sessionId());
                     }
@@ -178,7 +189,10 @@ public class ConnectionManagementPage extends BasePage {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
                         ConnectionService cs = connSvc();
-                        if (cs != null) cs.deleteSession(s.sessionId());
+                        if (cs != null) {
+                            log.info("User '{}' deleted session: {}", currentUser(), s.sessionId());
+                            cs.deleteSession(s.sessionId());
+                        }
                         target.add(tableBody);
                     }
 
@@ -253,8 +267,16 @@ public class ConnectionManagementPage extends BasePage {
                             model.resetOnLogon
                     );
                     if (model.editingSessionId != null) {
+                        log.info("User '{}' updated session: {} → {}→{} {}:{}",
+                                currentUser(), model.editingSessionId,
+                                req.senderCompID(), req.targetCompID(),
+                                req.host(), req.port());
                         cs.updateSession(model.editingSessionId, req);
                     } else {
+                        log.info("User '{}' added session: {}→{} {}:{} hb={}s",
+                                currentUser(),
+                                req.senderCompID(), req.targetCompID(),
+                                req.host(), req.port(), req.heartbeatSecs());
                         cs.addSession(req);
                     }
                     model.resetToDefaults();
@@ -316,6 +338,13 @@ public class ConnectionManagementPage extends BasePage {
      */
     private ConnectionService connSvc() {
         return ((FixSimulatorApplication) getApplication()).getConnectionService();
+    }
+
+    private String currentUser() {
+        var session = FixSimulatorSession.get();
+        if (session == null) return "?";
+        var user = session.getAuthenticatedUser();
+        return user != null ? user.username() : "?";
     }
 
     // ── Form model ────────────────────────────────────────────────────────────
