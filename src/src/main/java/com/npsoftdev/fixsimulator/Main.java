@@ -4,6 +4,10 @@ import org.eclipse.jetty.ee10.webapp.WebAppContext;
 import org.eclipse.jetty.server.Server;
 
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.TimeZone;
 
 /**
  * Embedded-Jetty launcher for the FIX Simulator.
@@ -13,6 +17,8 @@ import java.net.URL;
 public class Main {
 
     public static void main(String[] args) throws Exception {
+        applyOsTimezone();
+
         int port = 8080;
         for (String arg : args) {
             try { port = Integer.parseInt(arg); } catch (NumberFormatException ignored) {}
@@ -44,5 +50,101 @@ public class Main {
         System.out.printf("%n  FIX Simulator  →  http://localhost:%d%n%n", port);
 
         server.join();
+    }
+
+    /**
+     * Detects the host OS timezone and applies it as the JVM default so that
+     * Logback (and all other date/time formatting) uses local time rather than UTC.
+     *
+     * <p>Detection order:
+     * <ol>
+     *   <li>{@code -Duser.timezone} — already honoured by the JVM; skip if set.</li>
+     *   <li>{@code TZ} environment variable (works on all platforms).</li>
+     *   <li>Linux / macOS — {@code /etc/timezone} (plain text IANA name).</li>
+     *   <li>Linux / macOS — {@code /etc/localtime} symlink → extract IANA name
+     *       from the path (e.g. {@code …/zoneinfo/Asia/Bangkok}).</li>
+     *   <li>Windows — {@code HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation}
+     *       via {@code reg query}; maps Windows zone name to IANA via
+     *       {@link TimeZone#getTimeZone}.</li>
+     * </ol>
+     * Falls back silently to the existing JVM default if nothing is found.
+     */
+    private static void applyOsTimezone() {
+        // 1. Explicit JVM property takes priority — nothing to do
+        if (System.getProperty("user.timezone") != null) return;
+
+        String tzId = null;
+
+        // 2. TZ environment variable
+        tzId = nonBlank(System.getenv("TZ"));
+
+        // 3. Linux/macOS — /etc/timezone
+        if (tzId == null) {
+            tzId = readFile(Paths.get("/etc/timezone"));
+        }
+
+        // 4. Linux/macOS — /etc/localtime symlink
+        if (tzId == null) {
+            try {
+                Path lt = Paths.get("/etc/localtime");
+                if (Files.isSymbolicLink(lt)) {
+                    String target = Files.readSymbolicLink(lt).toString()
+                            .replace('\\', '/');
+                    int zi = target.indexOf("zoneinfo/");
+                    if (zi >= 0) tzId = target.substring(zi + "zoneinfo/".length());
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // 5. Windows — query registry
+        if (tzId == null && System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            tzId = windowsTimezone();
+        }
+
+        if (tzId != null) {
+            tzId = tzId.trim();
+            TimeZone tz = TimeZone.getTimeZone(tzId);
+            // getTimeZone returns GMT for unknown IDs — skip silently in that case
+            if (!tzId.equals("GMT") && tz.getID().equals("GMT") && !tzId.startsWith("GMT")) {
+                return; // unrecognised ID — leave JVM default alone
+            }
+            TimeZone.setDefault(tz);
+        }
+    }
+
+    /** Reads the first non-blank line of a text file, or returns {@code null}. */
+    private static String readFile(Path p) {
+        try {
+            if (!Files.exists(p)) return null;
+            return Files.readAllLines(p).stream()
+                    .map(String::trim)
+                    .filter(l -> !l.isEmpty() && !l.startsWith("#"))
+                    .findFirst().orElse(null);
+        } catch (Exception ignored) { return null; }
+    }
+
+    /** Queries the Windows registry for the current timezone name. */
+    private static String windowsTimezone() {
+        try {
+            Process p = new ProcessBuilder(
+                    "reg", "query",
+                    "HKLM\\SYSTEM\\CurrentControlSet\\Control\\TimeZoneInformation",
+                    "/v", "TimeZoneKeyName")
+                    .redirectErrorStream(true).start();
+            String out = new String(p.getInputStream().readAllBytes());
+            p.waitFor();
+            // Output line: "    TimeZoneKeyName    REG_SZ    SE Asia Standard Time"
+            for (String line : out.split("\r?\n")) {
+                if (line.contains("TimeZoneKeyName")) {
+                    String[] parts = line.trim().split("\\s{2,}");
+                    if (parts.length >= 3) return parts[parts.length - 1].trim();
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private static String nonBlank(String s) {
+        return (s != null && !s.isBlank()) ? s.trim() : null;
     }
 }
