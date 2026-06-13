@@ -233,6 +233,18 @@ public abstract class BasePage extends WebPage {
             }
         });
 
+        // ── "Manage Connections" footer link — hidden when user lacks permission ─
+        topbarNav.add(new WebMarkupContainer("manageConnectionsItem") {
+            @Override
+            protected void onConfigure() {
+                super.onConfigure();
+                User u = FixSimulatorSession.get().getAuthenticatedUser();
+                AuthService auth = app().getAuthService();
+                setVisible(auth != null
+                        && auth.hasPermission(u, Permission.VIEW_MANAGE_FIX_CONNECTIONS));
+            }
+        });
+
         // ── Sidebar navigation (registry-driven, permission-filtered) ──────────
         PluginRegistry registry = app().getPluginRegistry();
         add(buildNavList("overviewNav",   registry.getPluginsBySection(NavSection.OVERVIEW)));
