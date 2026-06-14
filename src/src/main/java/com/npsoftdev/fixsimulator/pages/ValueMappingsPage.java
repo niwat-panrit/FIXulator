@@ -20,6 +20,8 @@ import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.Model;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Collections;
@@ -27,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 
 public class ValueMappingsPage extends BasePage {
+
+    private static final Logger log = LoggerFactory.getLogger(ValueMappingsPage.class);
 
     public ValueMappingsPage() {
         super();
@@ -125,7 +129,10 @@ public class ValueMappingsPage extends BasePage {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
                         ValueMappingService svc = svc();
-                        if (svc != null) svc.deleteMapping(name);
+                        if (svc != null) {
+                            svc.deleteMapping(name);
+                            log.info("Value Mapping deleted: name='{}'", name);
+                        }
                         namesModel.detach();
                         if (name.equals(activeName.getObject())) {
                             // Select first remaining mapping, or none
@@ -183,6 +190,7 @@ public class ValueMappingsPage extends BasePage {
                     return;
                 }
                 svc.createMapping(name);
+                log.info("Value Mapping created: name='{}'", name);
                 activeName.setObject(name);
                 namesModel.detach();
                 entriesModel.detach();
@@ -257,7 +265,10 @@ public class ValueMappingsPage extends BasePage {
                     public void onClick(AjaxRequestTarget target) {
                         ValueMappingService svc = svc();
                         String name = activeName.getObject();
-                        if (svc != null && name != null) svc.remove(name, e.key);
+                        if (svc != null && name != null) {
+                            svc.remove(name, e.key);
+                            log.info("Value Mapping entry deleted: mapping='{}' key='{}'", name, e.key);
+                        }
                         entriesModel.detach();
                         if (e.key.equals(editingKey.getObject())) {
                             entryFormModel.reset();
@@ -326,6 +337,8 @@ public class ValueMappingsPage extends BasePage {
                     svc.remove(name, oldKey);
                 }
                 svc.put(name, newKey, newVal);
+                log.info("Value Mapping entry {}: mapping='{}' key='{}' value='{}'",
+                        oldKey == null ? "added" : "updated", name, newKey, newVal);
                 entriesModel.detach();
                 entryFormModel.reset();
                 editingKey.setObject(null);

@@ -29,6 +29,9 @@ import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.PropertyModel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -41,6 +44,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class OrdersPage extends BasePage {
+
+    private static final Logger log = LoggerFactory.getLogger(OrdersPage.class);
 
     /** FIX tags rendered via the structured form controls — excluded from extra-fields list. */
     private static final Set<Integer> STANDARD_TAGS = Set.of(
@@ -168,7 +173,11 @@ public class OrdersPage extends BasePage {
                         String sessionId = FixSimulatorSession.get().getActiveSessionId();
                         if (sessionId != null) {
                             OrderService os = orderSvc();
-                            if (os != null) os.cancelOrder(sessionId, clOrdId);
+                            if (os != null) {
+                                os.cancelOrder(sessionId, clOrdId);
+                                log.info("Cancel Order sent: session='{}' clOrdId='{}' (no template — direct cancel)",
+                                        sessionId, clOrdId);
+                            }
                         }
                         target.add(tableBody);
                     }
@@ -297,11 +306,18 @@ public class OrdersPage extends BasePage {
                     if (model.templateId != null) {
                         TemplateService ts = templateSvc();
                         if (ts == null) throw new IllegalStateException("Template service not available.");
+                        String tmplName = ts.findById(model.templateId)
+                                .map(t -> t.name()).orElse(model.templateId);
+                        log.info("New Order sent: session='{}' template='{}' (id={}) symbol='{}' side={} qty={} price={}",
+                                sessionId, tmplName, model.templateId,
+                                model.symbol, model.side, model.quantity, model.price);
                         ts.send(sessionId, model.templateId, buildNewOverrides(model));
                     } else {
                         // Fallback: direct OrderService send (no template configured)
                         OrderService os = orderSvc();
                         if (os == null) throw new IllegalStateException("Order service not available.");
+                        log.info("New Order sent (no template): session='{}' symbol='{}' side={} qty={} price={}",
+                                sessionId, model.symbol, model.side, model.quantity, model.price);
                         Map<Integer, String> fields = new HashMap<>();
                         fields.put(55, model.symbol);
                         fields.put(54, sideCode(model.side));
@@ -383,6 +399,11 @@ public class OrdersPage extends BasePage {
                     return;
                 }
                 try {
+                    String tmplName = ts.findById(model.templateId)
+                            .map(t -> t.name()).orElse(model.templateId);
+                    log.info("Amend Order sent: session='{}' template='{}' (id={}) origClOrdId='{}' symbol='{}' side={} qty={} price={}",
+                            sessionId, tmplName, model.templateId,
+                            model.origClOrdId, model.symbol, model.side, model.quantity, model.price);
                     ts.send(sessionId, model.templateId, buildAmendOverrides(model));
                     target.appendJavaScript(
                             "bootstrap.Modal.getInstance(document.getElementById('amendOrderModal')).hide();");

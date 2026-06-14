@@ -20,12 +20,16 @@ import org.apache.wicket.markup.html.panel.FeedbackPanel;
 import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.Model;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
 public class DynamicValuesPage extends BasePage {
+
+    private static final Logger log = LoggerFactory.getLogger(DynamicValuesPage.class);
 
     public DynamicValuesPage() {
         super();
@@ -91,7 +95,10 @@ public class DynamicValuesPage extends BasePage {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
                         DynamicValueRegistry reg = registry();
-                        if (reg != null) reg.removeCustom(def.name());
+                        if (reg != null) {
+                            reg.removeCustom(def.name());
+                            log.info("Dynamic Value deleted: name='{}'", def.name());
+                        }
                         customModel.detach();
                         target.add(customBody);
                     }
@@ -149,6 +156,7 @@ public class DynamicValuesPage extends BasePage {
                             tokenName,
                             formModel.description != null ? formModel.description.trim() : "",
                             formModel.constantValue.trim()));
+                    log.info("Dynamic Value created: name='{}'", tokenName);
                     customModel.detach();
                     formModel.reset();
                     target.add(customBody, addForm);

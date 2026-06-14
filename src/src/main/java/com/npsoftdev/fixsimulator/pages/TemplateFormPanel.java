@@ -9,6 +9,8 @@ import com.npsoftdev.fixsimulator.template.TemplateScope;
 import com.npsoftdev.fixsimulator.template.TemplateService;
 import org.apache.wicket.Application;
 import org.apache.wicket.ajax.AjaxRequestTarget;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.wicket.ajax.markup.html.form.AjaxButton;
 import org.apache.wicket.markup.head.IHeaderResponse;
 import org.apache.wicket.markup.head.JavaScriptHeaderItem;
@@ -51,6 +53,8 @@ import java.util.UUID;
  */
 public class TemplateFormPanel extends Panel {
 
+    private static final Logger log = LoggerFactory.getLogger(TemplateFormPanel.class);
+
     static final List<String> VALUE_TYPES =
             List.of("Literal", "UserInput", "Enumeration", "Placeholder", "Derived");
     static final List<String> PLACEHOLDER_TYPES =
@@ -85,6 +89,9 @@ public class TemplateFormPanel extends Panel {
 
     private TemplateFormPanel(String id, TemplateFormModel formModel) {
         super(id);
+        // Capture whether this is an edit (template pre-loaded from storage) or a create
+        final boolean isEdit = templateSvc() != null
+                && templateSvc().findById(formModel.id).isPresent();
 
         Form<TemplateFormModel> form = new Form<>("form",
                 new CompoundPropertyModel<>(formModel));
@@ -258,7 +265,12 @@ public class TemplateFormPanel extends Panel {
                     builder.addField(spec);
                 }
 
-                ts.save(builder.build());
+                FixMessageTemplate saved = builder.build();
+                ts.save(saved);
+                log.info("FIX Message Template {}: id={} name='{}' msgType={} scope={} priority={} fields={}",
+                        isEdit ? "updated" : "created",
+                        saved.id(), saved.name(), saved.msgType(),
+                        saved.scope(), saved.priority(), saved.fields().size());
                 setResponsePage(FixMessageTemplatesPage.class);
             }
         });

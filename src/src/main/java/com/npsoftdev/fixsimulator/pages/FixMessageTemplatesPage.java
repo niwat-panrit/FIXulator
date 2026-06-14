@@ -24,6 +24,9 @@ import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.request.mapper.parameter.PageParameters;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -35,6 +38,8 @@ import java.util.List;
  * Delete is handled inline with AJAX so the table refreshes without a full page load.
  */
 public class FixMessageTemplatesPage extends BasePage {
+
+    private static final Logger log = LoggerFactory.getLogger(FixMessageTemplatesPage.class);
 
     public FixMessageTemplatesPage() {
         super();
@@ -132,6 +137,8 @@ public class FixMessageTemplatesPage extends BasePage {
                         if (ts == null) return;
                         try {
                             ts.delete(t.id());
+                            log.info("FIX Message Template deleted: id={} name='{}' msgType={}",
+                                    t.id(), t.name(), t.msgType());
                         } catch (IllegalStateException ex) {
                             // Deletion-protected guard — should not be reached since the
                             // button is disabled in the UI, but guard defensively.
