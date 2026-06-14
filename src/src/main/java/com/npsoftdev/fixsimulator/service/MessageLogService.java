@@ -8,7 +8,7 @@ import java.util.List;
 public interface MessageLogService {
 
     /** Direction of a FIX message relative to this simulator. */
-    enum Direction { SENT, RECEIVED }
+    enum Direction { SENT, RECEIVED, SYSTEM }
 
     /** An immutable snapshot of a single logged FIX message. */
     record LogEntry(
@@ -26,4 +26,14 @@ public interface MessageLogService {
 
     /** Clears the in-memory message log for the session. */
     void clearLog(String sessionId);
+
+    /**
+     * Records a synthetic system-level annotation (not a raw FIX message).
+     * Used for events such as cache restore on startup.
+     *
+     * @param sessionId the session this annotation belongs to
+     * @param msgType   a short category tag (e.g. {@code "CACHE"})
+     * @param summary   human-readable description of the event
+     */
+    void recordSystem(String sessionId, String msgType, String summary);
 }

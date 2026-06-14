@@ -36,6 +36,11 @@ public class GatewayMessageLogService implements MessageLogService, Serializable
         log.computeIfAbsent(sessionID.toString(), k -> new CopyOnWriteArrayList<>()).add(0, entry);
     }
 
+    public void recordSystem(String sessionId, String msgType, String summary) {
+        LogEntry entry = new LogEntry(Direction.SYSTEM, msgType, summary, Instant.now());
+        log.computeIfAbsent(sessionId, k -> new CopyOnWriteArrayList<>()).add(0, entry);
+    }
+
     // ── MessageLogService ─────────────────────────────────────────────────────
 
     @Override

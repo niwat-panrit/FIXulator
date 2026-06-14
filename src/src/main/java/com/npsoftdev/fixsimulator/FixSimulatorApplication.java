@@ -211,6 +211,10 @@ public class FixSimulatorApplication extends WebApplication {
                 NavSection.ADMIN, ConnectionManagementPage.class,
                 loadFixSettings(cfgPath), cfgPath);
 
+        // Gateway must be registered (and thus initialized) before the order manager
+        // so that sessionIDs are populated before the cache restore runs.
+        pluginRegistry.register(gateway);
+
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "dashboard", "Dashboard", "bi-speedometer2",
                 NavSection.OVERVIEW, HomePage.class));
@@ -226,8 +230,6 @@ public class FixSimulatorApplication extends WebApplication {
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "fix-activity", "FIX Activity", "bi-activity",
                 NavSection.MONITORING, FixActivityPage.class));
-
-        pluginRegistry.register(gateway);
         pluginRegistry.register(new DefaultFixGatewayPlugin(
                 "fix-message-templates", "FIX Message Templates", "bi-layout-text-window-reverse",
                 NavSection.ADMIN, FixMessageTemplatesPage.class));

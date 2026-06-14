@@ -90,6 +90,20 @@ public class FixActivityPage extends BasePage {
 
                         List<ActivityRow> rows = new ArrayList<>(messages.size() * 2);
                         for (LogEntry entry : messages) {
+                            String timeStr = TIME_FMT.format(entry.timestamp());
+
+                            // System annotations (cache restore, etc.) — APP row only
+                            if (entry.direction() == MessageLogService.Direction.SYSTEM) {
+                                if ("All".equals(filter.direction)) {
+                                    rows.add(new ActivityRow(
+                                            EntryType.APP, timeStr, "", connName,
+                                            "\u2014", "", entry.msgType(), "\u2014", "\u2014",
+                                            entry.rawMessage(), entry.rawMessage(),
+                                            "bi-arrow-repeat", "text-info"));
+                                }
+                                continue;
+                            }
+
                             Map<String, String> tags = parseTags(entry.rawMessage());
                             String msgType = entry.msgType();
                             String dir = entry.direction() == MessageLogService.Direction.SENT
@@ -99,8 +113,6 @@ public class FixActivityPage extends BasePage {
                             if (filter.hideHeartbeats && "0".equals(msgType)) continue;
                             if ("Sent".equals(filter.direction)     && !"OUT".equals(dir)) continue;
                             if ("Received".equals(filter.direction) && !"IN".equals(dir))  continue;
-
-                            String timeStr = TIME_FMT.format(entry.timestamp());
 
                             // FIX message row
                             rows.add(new ActivityRow(

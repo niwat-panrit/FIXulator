@@ -14,6 +14,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -248,6 +249,29 @@ public class GatewayOrderService implements OrderService, Serializable {
         Map<String, MessageSnapshot> bySession = snapshots.get(sessionId);
         if (bySession == null) return Optional.empty();
         return Optional.ofNullable(bySession.get(clOrdId));
+    }
+
+    // ── Cache restore ─────────────────────────────────────────────────────────
+
+    /**
+     * Populates the in-memory order store from a previously persisted cache.
+     * Rebuilds the {@link #orderIndex} from the {@code ClOrdID} (tag 11) in
+     * each order map. Called once at startup before the FIX engine begins
+     * processing messages.
+     */
+    public void restoreOrders(String sessionId, List<Map<Integer, String>> loadedOrders) {
+        if (loadedOrders == null || loadedOrders.isEmpty()) return;
+        CopyOnWriteArrayList<Map<Integer, String>> list = new CopyOnWriteArrayList<>();
+        ConcurrentHashMap<String, Map<Integer, String>> index = new ConcurrentHashMap<>();
+        for (Map<Integer, String> raw : loadedOrders) {
+            ConcurrentHashMap<Integer, String> order = new ConcurrentHashMap<>(raw);
+            list.add(order);
+            String clOrdId = order.get(ClOrdID.FIELD);
+            if (clOrdId != null) index.put(clOrdId, order);
+        }
+        orders.put(sessionId, list);
+        orderIndex.put(sessionId, index);
+        log.info("Restored {} order(s) from cache for session {}", list.size(), sessionId);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

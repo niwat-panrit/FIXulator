@@ -12,6 +12,7 @@ import quickfix.field.ExecType;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -56,6 +57,22 @@ public class GatewayTradeService implements TradeService, Serializable {
                         fields.get(quickfix.field.LastPx.FIELD));
             }
         } catch (FieldNotFound ignored) {}
+    }
+
+    // ── Cache restore ─────────────────────────────────────────────────────────
+
+    /**
+     * Populates the in-memory trade store from a previously persisted cache.
+     * Called once at startup before the FIX engine begins processing messages.
+     */
+    public void restoreTrades(String sessionId, List<Map<Integer, String>> loadedTrades) {
+        if (loadedTrades == null || loadedTrades.isEmpty()) return;
+        CopyOnWriteArrayList<Map<Integer, String>> list = new CopyOnWriteArrayList<>();
+        for (Map<Integer, String> raw : loadedTrades) {
+            list.add(new LinkedHashMap<>(raw));
+        }
+        trades.put(sessionId, list);
+        log.info("Restored {} trade(s) from cache for session {}", list.size(), sessionId);
     }
 
     // ── TradeService ──────────────────────────────────────────────────────────

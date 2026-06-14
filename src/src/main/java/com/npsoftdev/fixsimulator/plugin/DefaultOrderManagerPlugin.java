@@ -5,6 +5,7 @@ import com.npsoftdev.fixsimulator.gateway.FixMessageListener;
 import com.npsoftdev.fixsimulator.gateway.GatewayOrderService;
 import com.npsoftdev.fixsimulator.gateway.GatewayTradeService;
 import com.npsoftdev.fixsimulator.gateway.LiveSessionFacade;
+import com.npsoftdev.fixsimulator.gateway.OrderTradeCacheService;
 import com.npsoftdev.fixsimulator.pages.BasePage;
 import com.npsoftdev.fixsimulator.template.DefaultFixMessageBuilder;
 import com.npsoftdev.fixsimulator.template.DefaultPlaceholderResolver;
@@ -130,6 +131,24 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         orderService = new GatewayOrderService(gateway.getSessionIDs(), facade);
         tradeService = new GatewayTradeService();
 
+        // ── Order/trade cache — restore last session state ────────────────────
+        OrderTradeCacheService cacheService = new OrderTradeCacheService(dataDir.resolve("cache"));
+        for (String sessionId : gateway.getSessionIDs().keySet()) {
+            OrderTradeCacheService.CacheData cached = cacheService.load(sessionId);
+            if (cached != null) {
+                orderService.restoreOrders(sessionId, cached.orders());
+                tradeService.restoreTrades(sessionId, cached.trades());
+                // Log the restore event in FIX Activity so users can see it in the UI
+                if (app.getMessageLogService() != null) {
+                    int orderCount = cached.orders() != null ? cached.orders().size() : 0;
+                    int tradeCount = cached.trades() != null ? cached.trades().size() : 0;
+                    app.getMessageLogService().recordSystem(sessionId, "CACHE",
+                            "Restored " + orderCount + " order(s) and " + tradeCount
+                                    + " trade(s) from cache on startup");
+                }
+            }
+        }
+
         // ── Template stack (YAML-backed) ──────────────────────────────────────
         YamlPersistenceService yamlService = new YamlPersistenceService(dataDir);
 
@@ -150,7 +169,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
 
         seedBuiltInTemplates(templateRepository);
 
-        gateway.addMessageListener(new OrderManagerListener());
+        gateway.addMessageListener(new OrderManagerListener(cacheService));
 
         // ── Log file service ──────────────────────────────────────────────────
         String logDir  = System.getProperty("app.log.dir",  "logs");
@@ -268,16 +287,22 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
      */
     private class OrderManagerListener implements FixMessageListener {
 
+        private final OrderTradeCacheService cacheService;
+
+        OrderManagerListener(OrderTradeCacheService cacheService) {
+            this.cacheService = cacheService;
+        }
+
         @Override
         public void onOutbound(SessionID sessionID, Message message) {
             orderService.onOutboundMessage(sessionID, message);
+            saveCache(sessionID.toString());
         }
 
         @Override
         public void onInbound(SessionID sessionID, Message message) {
             try {
                 String msgType = message.getHeader().getString(MsgType.FIELD);
-
                 if (MsgType.EXECUTION_REPORT.equals(msgType)) {
                     tradeService.onExecutionReport(sessionID, message);
                     orderService.onInboundMessage(sessionID, message);
@@ -285,6 +310,13 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
                     orderService.onInboundMessage(sessionID, message);
                 }
             } catch (FieldNotFound ignored) {}
+            saveCache(sessionID.toString());
+        }
+
+        private void saveCache(String sessionId) {
+            cacheService.save(sessionId,
+                    orderService.listOrders(sessionId),
+                    tradeService.listTrades(sessionId));
         }
     }
 }
