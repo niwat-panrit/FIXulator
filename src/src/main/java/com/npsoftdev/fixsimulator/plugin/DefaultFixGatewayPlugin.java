@@ -369,7 +369,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
         log.info("Starting FIX initiator for session: {}", sid);
         Initiator init = new SocketInitiator(
                 this,
-                new MemoryStoreFactory(),
+                new FileStoreFactory(perSessionSettings),
                 perSessionSettings,
                 new SLF4JLogFactory(perSessionSettings),
                 new DefaultMessageFactory());
@@ -407,7 +407,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
                 ? Integer.parseInt(safeGetStr(sid, "SocketConnectPort", "9876"))
                 : Integer.parseInt(safeGetStr(sid, "SocketAcceptPort",  "9876"));
         int     heartbeatSecs = Integer.parseInt(safeGetStr(sid, "HeartBtInt", "30"));
-        boolean resetOnLogon  = "Y".equalsIgnoreCase(safeGetStr(sid, "ResetOnLogon", "Y"));
+        boolean resetOnLogon  = "Y".equalsIgnoreCase(safeGetStr(sid, "ResetOnLogon", "N"));
 
         com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest req =
                 new com.npsoftdev.fixsimulator.service.ConnectionService.NewSessionRequest(
@@ -468,6 +468,7 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
         cfg.append("EndTime=00:00:00\n");
         cfg.append("UseDataDictionary=N\n");
         cfg.append("CheckLatency=N\n");
+        cfg.append("FileStorePath=data/fix-store\n");
     }
 
     // ── Persistence ──────────────────────────────────────────────────────────
@@ -491,8 +492,9 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             appendDefaultKey(sb, "EndTime",           "00:00:00");
             appendDefaultKey(sb, "HeartBtInt",        "30");
             appendDefaultKey(sb, "UseDataDictionary", "N");
-            appendDefaultKey(sb, "ResetOnLogon",      "Y");
+            appendDefaultKey(sb, "ResetOnLogon",      "N");
             appendDefaultKey(sb, "CheckLatency",      "N");
+            appendDefaultKey(sb, "FileStorePath",     "data/fix-store");
             appendDefaultKey(sb, "SocketConnectHost", null);
             sb.append('\n');
 
