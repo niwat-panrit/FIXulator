@@ -26,6 +26,7 @@ import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.ListView;
 import org.apache.wicket.markup.html.panel.FeedbackPanel;
 import org.apache.wicket.model.CompoundPropertyModel;
+import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.PropertyModel;
 
@@ -59,10 +60,12 @@ public class OrdersPage extends BasePage {
     );
 
     // ── Page-level state (fields so onSessionSwitched can access them) ────────
-    private final NewOrderModel newOrderModel = new NewOrderModel();
-    private final AmendModel    amendModel    = new AmendModel();
-    private Form<NewOrderModel> newOrderForm;
-    private Form<AmendModel>    amendOrderForm;
+    private final NewOrderModel    newOrderModel      = new NewOrderModel();
+    private final AmendModel       amendModel         = new AmendModel();
+    private Form<NewOrderModel>    newOrderForm;
+    private Form<AmendModel>       amendOrderForm;
+    private WebMarkupContainer     newOrderToolbarBtn;
+    private WebMarkupContainer     tableBody;
 
     public OrdersPage() {
         super();
@@ -86,7 +89,7 @@ public class OrdersPage extends BasePage {
         amendOrderForm.setOutputMarkupId(true);
 
         // ── Orders table body (auto-refreshed every 3 s) ─────────────────────
-        WebMarkupContainer tableBody = new WebMarkupContainer("tableBody");
+        tableBody = new WebMarkupContainer("tableBody");
         tableBody.setOutputMarkupId(true);
         tableBody.add(new AjaxSelfUpdatingTimerBehavior(Duration.ofSeconds(3)));
 
@@ -147,7 +150,7 @@ public class OrdersPage extends BasePage {
                 item.add(AttributeModifier.replace("class", rowClass(ordStatus)));
 
                 // ── Amend button ───────────────────────────────────────────────
-                item.add(new AjaxLink<Void>("amendBtn") {
+                AjaxLink<Void> amendBtn = new AjaxLink<Void>("amendBtn") {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
                         amendModel.origClOrdId  = clOrdId;
@@ -165,10 +168,13 @@ public class OrdersPage extends BasePage {
                         target.appendJavaScript(
                                 "new bootstrap.Modal(document.getElementById('amendOrderModal')).show();");
                     }
-                });
+                };
+                amendBtn.add(AttributeModifier.replace("title",
+                        (IModel<String>) () -> templateTooltip("Amend Order", amendModel.templateId)));
+                item.add(amendBtn);
 
                 // ── Cancel button ──────────────────────────────────────────────
-                item.add(new AjaxLink<Void>("cancelBtn") {
+                AjaxLink<Void> cancelBtn = new AjaxLink<Void>("cancelBtn") {
                     @Override
                     public void onClick(AjaxRequestTarget target) {
                         String sessionId = FixSimulatorSession.get().getActiveSessionId();
@@ -190,7 +196,10 @@ public class OrdersPage extends BasePage {
                         attributes.getAjaxCallListeners().add(new AjaxCallListener()
                                 .onPrecondition("return confirm('Cancel order \\'" + safe + "\\'?');"));
                     }
-                });
+                };
+                cancelBtn.add(AttributeModifier.replace("title",
+                        "Cancel Order (no template — direct OrderCancelRequest)"));
+                item.add(cancelBtn);
             }
         });
 
@@ -212,6 +221,13 @@ public class OrdersPage extends BasePage {
                         "Stopped", "Rejected", "Suspended", "Expired",
                         "PendCxl", "PendReplace", "PendingNew"), tableBody);
 
+        // ── New Order toolbar button with template tooltip ────────────────────
+        newOrderToolbarBtn = new WebMarkupContainer("newOrderToolbarBtn");
+        newOrderToolbarBtn.setOutputMarkupId(true);
+        newOrderToolbarBtn.add(AttributeModifier.replace("title",
+                (IModel<String>) () -> templateTooltip("New Order", newOrderModel.templateId)));
+        add(newOrderToolbarBtn);
+
         add(filterForm);
         newOrderForm = buildNewOrderForm(newOrderModel);
         newOrderForm.setOutputMarkupId(true);
@@ -230,6 +246,8 @@ public class OrdersPage extends BasePage {
         amendModel.templateId  = ocrTmpl != null ? ocrTmpl.id() : null;
         amendModel.extraFields = loadExtraFields(ocrTmpl);
 
+        target.add(newOrderToolbarBtn);
+        target.add(tableBody);
         target.add(newOrderForm);
         target.add(amendOrderForm);
     }
@@ -534,6 +552,16 @@ public class OrdersPage extends BasePage {
 
     private static TemplateService templateSvc() {
         return ((FixSimulatorApplication) Application.get()).getTemplateService();
+    }
+
+    private static String templateTooltip(String action, String templateId) {
+        if (templateId == null)
+            return action + " (no template configured for this session)";
+        TemplateService ts = templateSvc();
+        if (ts == null) return action;
+        return ts.findById(templateId)
+                .map(t -> action + " — " + t.name() + "  [" + t.msgType() + "]")
+                .orElse(action + " (template not found)");
     }
 
     // ── Display helpers ───────────────────────────────────────────────────────
