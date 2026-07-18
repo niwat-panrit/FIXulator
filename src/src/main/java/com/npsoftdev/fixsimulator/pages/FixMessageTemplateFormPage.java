@@ -21,9 +21,10 @@ public class FixMessageTemplateFormPage extends BasePage {
 
     public FixMessageTemplateFormPage(PageParameters params) {
         super();
-        String templateId  = params.get("templateId").toOptionalString();
-        boolean fromParsed = params.get("fromParsed").toBoolean(false);
-        boolean isEdit     = templateId != null;
+        String templateId   = params.get("templateId").toOptionalString();
+        String duplicateId  = params.get("duplicateId").toOptionalString();
+        boolean fromParsed  = params.get("fromParsed").toBoolean(false);
+        boolean isEdit      = templateId != null;
 
         add(new Label("pageAction", isEdit ? "Edit Template" : "New Template"));
 
@@ -31,6 +32,8 @@ public class FixMessageTemplateFormPage extends BasePage {
             // Consume (and clear) the raw FIX message stored by the list page
             String raw = FixSimulatorSession.get().takePendingFixMessage();
             add(new TemplateFormPanel("templateFormPanel", null, raw));
+        } else if (duplicateId != null) {
+            add(new TemplateFormPanel("templateFormPanel", duplicateId, true));
         } else {
             add(new TemplateFormPanel("templateFormPanel", templateId));
         }

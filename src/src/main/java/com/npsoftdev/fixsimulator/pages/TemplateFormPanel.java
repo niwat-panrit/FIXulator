@@ -87,6 +87,14 @@ public class TemplateFormPanel extends Panel {
         this(id, buildModel(templateId, rawFixMessage));
     }
 
+    /**
+     * Creates the panel in duplicate mode: loads {@code sourceTemplateId}, assigns a fresh UUID,
+     * prefixes the name with "Copy of ", and clears deletion-protection so the copy is editable.
+     */
+    public TemplateFormPanel(String id, String sourceTemplateId, boolean duplicate) {
+        this(id, buildDuplicateModel(sourceTemplateId));
+    }
+
     private TemplateFormPanel(String id, TemplateFormModel formModel) {
         super(id);
         // Capture whether this is an edit (template pre-loaded from storage) or a create
@@ -282,6 +290,19 @@ public class TemplateFormPanel extends Panel {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static TemplateFormModel buildDuplicateModel(String sourceTemplateId) {
+        TemplateFormModel model = new TemplateFormModel(); // starts with a fresh UUID
+        TemplateService ts = templateSvc();
+        if (ts != null) {
+            ts.findById(sourceTemplateId).ifPresent(t -> {
+                model.loadFrom(t);
+                model.id = UUID.randomUUID().toString();
+                model.name = "Copy of " + t.name();
+            });
+        }
+        return model;
+    }
 
     private static TemplateFormModel buildModel(String templateId, String rawFixMessage) {
         TemplateFormModel model = new TemplateFormModel();

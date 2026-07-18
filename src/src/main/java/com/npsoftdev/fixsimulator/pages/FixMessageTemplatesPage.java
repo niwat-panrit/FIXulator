@@ -129,6 +129,12 @@ public class FixMessageTemplatesPage extends BasePage {
                 item.add(new BookmarkablePageLink<>("editBtn",
                         FixMessageTemplateFormPage.class, editParams));
 
+                // Duplicate button — opens the form page pre-populated as a copy
+                PageParameters dupParams = new PageParameters();
+                dupParams.add("duplicateId", t.id());
+                item.add(new BookmarkablePageLink<>("duplicateBtn",
+                        FixMessageTemplateFormPage.class, dupParams));
+
                 // Delete button — AJAX in-place; disabled for protected templates
                 AjaxLink<Void> deleteBtn = new AjaxLink<>("deleteBtn") {
                     @Override
