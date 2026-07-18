@@ -2,7 +2,7 @@
 <body>
 <wicket:panel>
 
-<form wicket:id="form">
+<form wicket:id="form" class="template-form">
 
     <!-- Validation feedback -->
     <div wicket:id="feedback" class="mb-3"></div>
@@ -31,7 +31,7 @@
                         Name <span class="text-danger">*</span>
                     </label>
                     <input type="text" wicket:id="name"
-                           class="form-control form-control-sm"
+                           class="form-control form-control-sm tmpl-name"
                            placeholder="e.g. New Order Single — AAPL"/>
                 </div>
 
@@ -40,7 +40,7 @@
                         MsgType <span class="text-danger">*</span>
                     </label>
                     <input type="text" wicket:id="msgType"
-                           class="form-control form-control-sm font-monospace"
+                           class="form-control form-control-sm font-monospace tmpl-msgtype"
                            placeholder="e.g. D, G, F"/>
                     <div class="form-text">FIX MsgType field value (tag 35).</div>
                 </div>
@@ -50,7 +50,7 @@
                         BeginString <span class="text-danger">*</span>
                     </label>
                     <input type="text" wicket:id="beginString"
-                           class="form-control form-control-sm font-monospace"
+                           class="form-control form-control-sm font-monospace tmpl-beginstring"
                            placeholder="FIX.4.4"/>
                 </div>
 
@@ -66,7 +66,7 @@
                         Priority <span class="text-danger">*</span>
                     </label>
                     <input type="number" wicket:id="priority"
-                           class="form-control form-control-sm"
+                           class="form-control form-control-sm tmpl-priority"
                            min="1" placeholder="100"/>
                     <div class="form-text">
                         Lower = selected first. Default: 100.
@@ -76,7 +76,7 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Scope</label>
                     <select wicket:id="scopeType"
-                            class="form-select form-select-sm"></select>
+                            class="form-select form-select-sm tmpl-scope-type"></select>
                 </div>
 
                 <div class="col-md-9">
@@ -87,7 +87,7 @@
                         </span>
                     </label>
                     <input type="text" wicket:id="scopeSessionId"
-                           class="form-control form-control-sm font-monospace"
+                           class="form-control form-control-sm font-monospace tmpl-scope-session-id"
                            placeholder="e.g. FIX.4.4:SIMULATOR->EXCHANGE"/>
                 </div>
 
@@ -135,12 +135,12 @@
                                 </td>
                             </tr>
 
-                            <tr wicket:id="fieldRows" class="align-middle">
+                            <tr wicket:id="fieldRows" class="align-middle field-row">
 
                                 <!-- Tag number -->
                                 <td>
                                     <input type="number" wicket:id="tag"
-                                           class="form-control form-control-sm font-monospace"
+                                           class="form-control form-control-sm font-monospace field-tag"
                                            min="1" placeholder="tag"/>
                                 </td>
 
@@ -165,7 +165,7 @@
                                         <div class="row g-1">
                                             <div class="col-6">
                                                 <input type="text" wicket:id="uiName"
-                                                       class="form-control form-control-sm"
+                                                       class="form-control form-control-sm field-ui-name"
                                                        placeholder="input name (e.g. symbol)"/>
                                             </div>
                                             <div class="col-6">
@@ -181,12 +181,12 @@
                                         <div class="row g-1">
                                             <div class="col-3">
                                                 <input type="text" wicket:id="enumName"
-                                                       class="form-control form-control-sm"
+                                                       class="form-control form-control-sm field-enum-name"
                                                        placeholder="field name"/>
                                             </div>
                                             <div class="col-6">
                                                 <input type="text" wicket:id="enumOptions"
-                                                       class="form-control form-control-sm font-monospace"
+                                                       class="form-control form-control-sm font-monospace field-enum-options"
                                                        placeholder="1, 2, 3  (comma-separated values)"/>
                                             </div>
                                             <div class="col-3">
@@ -208,12 +208,12 @@
                                         <div class="row g-1">
                                             <div class="col-4">
                                                 <input type="number" wicket:id="derivedSourceTag"
-                                                       class="form-control form-control-sm font-monospace"
+                                                       class="form-control form-control-sm font-monospace field-derived-source-tag"
                                                        placeholder="source tag"/>
                                             </div>
                                             <div class="col-8">
                                                 <input type="text" wicket:id="derivedMappingName"
-                                                       class="form-control form-control-sm"
+                                                       class="form-control form-control-sm field-derived-mapping-name"
                                                        placeholder="mapping name (e.g. symbol-to-isin)"/>
                                             </div>
                                         </div>
@@ -236,6 +236,13 @@
             </div>
 
         </div>
+    </div>
+
+    <!-- ── Client-side validation summary ──────────────────────────────────── -->
+    <div id="template-validation-summary"
+         class="alert alert-danger d-none mb-3"
+         role="alert"
+         style="font-size:0.84rem;">
     </div>
 
     <!-- ── Action buttons ─────────────────────────────────────────────────── -->
