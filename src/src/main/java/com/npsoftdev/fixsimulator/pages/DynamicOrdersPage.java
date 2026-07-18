@@ -50,6 +50,9 @@ import java.util.Set;
  */
 public class DynamicOrdersPage extends BasePage {
 
+    private Form<Void>   sendForm;
+    private SendModel    sendModel;
+
     /** Tags that appear in the "standard fields" structured layout. */
     private static final Set<Integer> STANDARD_TAGS = Set.of(
             55,  // Symbol
@@ -74,8 +77,11 @@ public class DynamicOrdersPage extends BasePage {
     public DynamicOrdersPage() {
         super();
 
-        SendModel model = new SendModel();
-        Form<Void> form = new Form<>("sendForm");
+        sendModel = new SendModel();
+        SendModel model = sendModel;
+        sendForm = new Form<>("sendForm");
+        Form<Void> form = sendForm;
+        form.setOutputMarkupId(true);
 
         FeedbackPanel feedback = new FeedbackPanel("feedback");
         feedback.setOutputMarkupId(true);
@@ -271,6 +277,15 @@ public class DynamicOrdersPage extends BasePage {
         });
 
         add(form);
+    }
+
+    @Override
+    protected void onSessionSwitched(AjaxRequestTarget target) {
+        // Clear selection — the chosen template may not apply to the new session
+        sendModel.selectedTemplate = null;
+        sendModel.standardFields.clear();
+        sendModel.additionalFields.clear();
+        target.add(sendForm);
     }
 
     // ── Field row rendering (shared by standard + additional ListViews) ────────

@@ -16,8 +16,8 @@ import java.util.Optional;
  *
  * <p>{@link #findVisibleTo(SessionID)} is the canonical query the UI uses
  * when populating the template picker for the active session — it returns
- * the union of {@link TemplateScope.Global} templates and {@link TemplateScope.Session}
- * templates whose scope matches.</p>
+ * the union of {@link TemplateScope.Global} templates and {@link TemplateScope.Sessions}
+ * templates whose scope contains the given session ID.</p>
  */
 public interface TemplateRepository extends Serializable {
 
@@ -31,7 +31,7 @@ public interface TemplateRepository extends Serializable {
 
     /**
      * Templates with {@link TemplateScope.Global} scope plus those whose
-     * {@link TemplateScope.Session} scope matches the given session.
+     * {@link TemplateScope.Sessions} scope contains the given session.
      */
     List<FixMessageTemplate> findVisibleTo(SessionID sessionID);
 

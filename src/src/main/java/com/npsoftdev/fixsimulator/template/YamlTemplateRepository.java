@@ -164,8 +164,16 @@ public class YamlTemplateRepository implements TemplateRepository {
     }
 
     private static TemplateScope scopeFromDto(ScopeDto s) {
-        if (s == null || !"session".equalsIgnoreCase(s.type)) return TemplateScope.global();
-        return TemplateScope.session(s.sessionId);
+        if (s == null) return TemplateScope.global();
+        // Current format: type=sessions + sessionIds list
+        if ("sessions".equalsIgnoreCase(s.type) && s.sessionIds != null && !s.sessionIds.isEmpty()) {
+            return TemplateScope.sessions(s.sessionIds);
+        }
+        // Legacy format: type=session + single sessionId string
+        if ("session".equalsIgnoreCase(s.type) && s.sessionId != null && !s.sessionId.isBlank()) {
+            return TemplateScope.session(s.sessionId);
+        }
+        return TemplateScope.global();
     }
 
     private static FieldValue fieldValueFromDto(FieldValueDto v) {
@@ -200,9 +208,9 @@ public class YamlTemplateRepository implements TemplateRepository {
 
     private static ScopeDto scopeToDto(TemplateScope s) {
         ScopeDto d = new ScopeDto();
-        if (s instanceof TemplateScope.Session sess) {
-            d.type      = "session";
-            d.sessionId = sess.sessionId();
+        if (s instanceof TemplateScope.Sessions sess) {
+            d.type       = "sessions";
+            d.sessionIds = new ArrayList<>(sess.sessionIds());
         } else {
             d.type = "global";
         }
@@ -261,8 +269,9 @@ public class YamlTemplateRepository implements TemplateRepository {
     }
 
     static class ScopeDto {
-        public String type;
-        public String sessionId;
+        public String       type;
+        public String       sessionId;   // legacy single-session field — read-only for migration
+        public List<String> sessionIds;  // current multi-session field
     }
 
     static class FieldSpecDto {

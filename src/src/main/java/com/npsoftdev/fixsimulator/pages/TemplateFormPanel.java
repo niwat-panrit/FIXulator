@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.pages;
 
 import com.npsoftdev.fixsimulator.FixSimulatorApplication;
+import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.template.FieldSpec;
 import com.npsoftdev.fixsimulator.template.FieldValue;
 import com.npsoftdev.fixsimulator.template.FixMessageTemplate;
@@ -11,12 +12,14 @@ import org.apache.wicket.Application;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.wicket.ajax.form.AjaxFormComponentUpdatingBehavior;
 import org.apache.wicket.ajax.markup.html.form.AjaxButton;
 import org.apache.wicket.markup.head.IHeaderResponse;
 import org.apache.wicket.markup.head.JavaScriptHeaderItem;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.Button;
+import org.apache.wicket.markup.html.form.CheckBoxMultipleChoice;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.form.IChoiceRenderer;
@@ -29,12 +32,14 @@ import org.apache.wicket.markup.html.panel.FeedbackPanel;
 import org.apache.wicket.markup.html.panel.Panel;
 import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.IModel;
+import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.request.resource.PackageResourceReference;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -117,8 +122,38 @@ public class TemplateFormPanel extends Panel {
         form.add(new TextField<String>("msgType").setRequired(true));
         form.add(new NumberTextField<>("priority", new PropertyModel<>(formModel, "priority"), Integer.class)
                 .setMinimum(1).setRequired(true));
-        form.add(new DropDownChoice<>("scopeType", List.of("Global", "Session")));
-        form.add(new TextField<String>("scopeSessionId"));
+        // Session-picker container — Wicket controls visibility server-side so it
+        // shows/hides correctly on both initial render and after scope-type changes.
+        WebMarkupContainer sessionPickerContainer = new WebMarkupContainer("sessionPickerContainer") {
+            @Override
+            protected void onConfigure() {
+                super.onConfigure();
+                setVisible("Sessions".equals(formModel.scopeType));
+            }
+        };
+        sessionPickerContainer.setOutputMarkupPlaceholderTag(true);
+
+        CheckBoxMultipleChoice<String> sessionPicker = new CheckBoxMultipleChoice<>(
+                "scopeSessionIds",
+                new PropertyModel<>(formModel, "scopeSessionIds"),
+                new LoadableDetachableModel<>() {
+                    @Override protected List<String> load() { return availableSessionIds(); }
+                });
+        sessionPicker.setPrefix("<div class=\"form-check\">");
+        sessionPicker.setSuffix("</div>");
+        sessionPickerContainer.add(sessionPicker);
+        form.add(sessionPickerContainer);
+
+        // When scope type changes, update the form model and re-render the picker.
+        DropDownChoice<String> scopeTypeChoice = new DropDownChoice<>("scopeType",
+                List.of("Global", "Sessions"));
+        scopeTypeChoice.add(new AjaxFormComponentUpdatingBehavior("change") {
+            @Override
+            protected void onUpdate(AjaxRequestTarget target) {
+                target.add(sessionPickerContainer);
+            }
+        });
+        form.add(scopeTypeChoice);
 
         // ── Fields container ──────────────────────────────────────────────────
         WebMarkupContainer fieldsContainer = new WebMarkupContainer("fieldsContainer");
@@ -218,10 +253,10 @@ public class TemplateFormPanel extends Panel {
                     return;
                 }
 
-                TemplateScope scope = "Session".equals(formModel.scopeType)
-                        && formModel.scopeSessionId != null
-                        && !formModel.scopeSessionId.isBlank()
-                        ? TemplateScope.session(formModel.scopeSessionId)
+                TemplateScope scope = "Sessions".equals(formModel.scopeType)
+                        && formModel.scopeSessionIds != null
+                        && !formModel.scopeSessionIds.isEmpty()
+                        ? TemplateScope.sessions(formModel.scopeSessionIds)
                         : TemplateScope.global();
 
                 FixMessageTemplate.Builder builder = FixMessageTemplate.builder()
@@ -374,6 +409,15 @@ public class TemplateFormPanel extends Panel {
         return ((FixSimulatorApplication) Application.get()).getTemplateService();
     }
 
+    /** Returns all registered FIX session IDs, sorted, for use as checkbox choices. */
+    static List<String> availableSessionIds() {
+        ConnectionService cs = ((FixSimulatorApplication) Application.get()).getConnectionService();
+        if (cs == null) return List.of();
+        List<String> ids = new ArrayList<>(cs.listSessionIds());
+        Collections.sort(ids);
+        return ids;
+    }
+
     /** Parses a comma-or-newline-separated string into a trimmed, non-empty list. */
     static List<String> parseOptions(String raw) {
         if (raw == null || raw.isBlank()) return List.of();
@@ -395,7 +439,7 @@ public class TemplateFormPanel extends Panel {
         String msgType = "";
         int priority = 100;
         String scopeType = "Global";
-        String scopeSessionId = "";
+        List<String> scopeSessionIds = new ArrayList<>();
         List<FieldFormRow> fields = new ArrayList<>();
 
         void loadFrom(FixMessageTemplate t) {
@@ -405,12 +449,12 @@ public class TemplateFormPanel extends Panel {
             beginString = t.beginString();
             msgType = t.msgType();
             priority = t.priority();
-            if (t.scope() instanceof TemplateScope.Session s) {
-                scopeType = "Session";
-                scopeSessionId = s.sessionId();
+            if (t.scope() instanceof TemplateScope.Sessions s) {
+                scopeType = "Sessions";
+                scopeSessionIds = new ArrayList<>(s.sessionIds());
             } else {
                 scopeType = "Global";
-                scopeSessionId = "";
+                scopeSessionIds = new ArrayList<>();
             }
             fields = new ArrayList<>();
             for (FieldSpec spec : t.fields()) {
@@ -457,8 +501,8 @@ public class TemplateFormPanel extends Panel {
         public void setPriority(int v)         { priority = v; }
         public String getScopeType()           { return scopeType; }
         public void setScopeType(String v)     { scopeType = v; }
-        public String getScopeSessionId()      { return scopeSessionId; }
-        public void setScopeSessionId(String v){ scopeSessionId = v; }
+        public List<String> getScopeSessionIds()           { return scopeSessionIds; }
+        public void setScopeSessionIds(List<String> v)    { scopeSessionIds = v; }
         public List<FieldFormRow> getFields()  { return fields; }
         public void setFields(List<FieldFormRow> v){ fields = v; }
     }

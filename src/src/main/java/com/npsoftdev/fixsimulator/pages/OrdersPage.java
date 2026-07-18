@@ -58,9 +58,11 @@ public class OrdersPage extends BasePage {
             41   // OrigClOrdID — handled via amend model's origClOrdId field
     );
 
-    // ── Page-level amend state ─────────────────────────────────────────────────
-    private final AmendModel amendModel = new AmendModel();
-    private Form<AmendModel> amendOrderForm;
+    // ── Page-level state (fields so onSessionSwitched can access them) ────────
+    private final NewOrderModel newOrderModel = new NewOrderModel();
+    private final AmendModel    amendModel    = new AmendModel();
+    private Form<NewOrderModel> newOrderForm;
+    private Form<AmendModel>    amendOrderForm;
 
     public OrdersPage() {
         super();
@@ -68,7 +70,6 @@ public class OrdersPage extends BasePage {
         FilterModel filter = new FilterModel();
 
         // ── Pre-load templates so extra-fields are available at construction time
-        NewOrderModel newOrderModel = new NewOrderModel();
         FixMessageTemplate nosTmpl = findTemplate("D");
         if (nosTmpl != null) {
             newOrderModel.templateId   = nosTmpl.id();
@@ -212,8 +213,25 @@ public class OrdersPage extends BasePage {
                         "PendCxl", "PendReplace", "PendingNew"), tableBody);
 
         add(filterForm);
-        add(buildNewOrderForm(newOrderModel));
+        newOrderForm = buildNewOrderForm(newOrderModel);
+        newOrderForm.setOutputMarkupId(true);
+        add(newOrderForm);
         add(amendOrderForm);
+    }
+
+    @Override
+    protected void onSessionSwitched(AjaxRequestTarget target) {
+        // Re-associate templates with the new active session
+        FixMessageTemplate nosTmpl = findTemplate("D");
+        newOrderModel.templateId  = nosTmpl != null ? nosTmpl.id() : null;
+        newOrderModel.extraFields = loadExtraFields(nosTmpl);
+
+        FixMessageTemplate ocrTmpl = findTemplate("G");
+        amendModel.templateId  = ocrTmpl != null ? ocrTmpl.id() : null;
+        amendModel.extraFields = loadExtraFields(ocrTmpl);
+
+        target.add(newOrderForm);
+        target.add(amendOrderForm);
     }
 
     // ── Filter helpers ────────────────────────────────────────────────────────
@@ -282,8 +300,13 @@ public class OrdersPage extends BasePage {
                 List.of("Day", "GTC", "IOC", "FOK")).setRequired(true));
 
         // Extra fields from template (non-standard UserInput / Enumeration)
-        WebMarkupContainer extraSection = new WebMarkupContainer("newOrderExtraSection");
-        extraSection.setVisible(!model.extraFields.isEmpty());
+        WebMarkupContainer extraSection = new WebMarkupContainer("newOrderExtraSection") {
+            @Override
+            protected void onConfigure() {
+                super.onConfigure();
+                setVisible(!model.extraFields.isEmpty());
+            }
+        };
         extraSection.add(new ListView<ExtraEntry>("newOrderExtraRows",
                 new PropertyModel<>(model, "extraFields")) {
             @Override
@@ -366,8 +389,13 @@ public class OrdersPage extends BasePage {
         form.add(new DropDownChoice<>("timeInForce",
                 List.of("Day", "GTC", "IOC", "FOK")).setRequired(true));
 
-        WebMarkupContainer extraSection = new WebMarkupContainer("amendExtraSection");
-        extraSection.setVisible(!model.extraFields.isEmpty());
+        WebMarkupContainer extraSection = new WebMarkupContainer("amendExtraSection") {
+            @Override
+            protected void onConfigure() {
+                super.onConfigure();
+                setVisible(!model.extraFields.isEmpty());
+            }
+        };
         extraSection.add(new ListView<ExtraEntry>("amendExtraRows",
                 new PropertyModel<>(model, "extraFields")) {
             @Override
@@ -444,7 +472,11 @@ public class OrdersPage extends BasePage {
     private static FixMessageTemplate findTemplate(String msgType) {
         TemplateService ts = templateSvc();
         if (ts == null) return null;
-        return ts.findAll().stream()
+        String sid = FixSimulatorSession.get().getActiveSessionId();
+        List<FixMessageTemplate> candidates = sid != null
+                ? ts.findVisibleTo(sid)
+                : ts.findAll();
+        return candidates.stream()
                 .filter(t -> msgType.equals(t.msgType()))
                 .findFirst().orElse(null);
     }

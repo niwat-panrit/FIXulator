@@ -79,16 +79,19 @@
                             class="form-select form-select-sm tmpl-scope-type"></select>
                 </div>
 
-                <div class="col-md-9">
+                <div wicket:id="sessionPickerContainer" class="col-md-9">
                     <label class="form-label fw-semibold">
-                        Session ID
+                        Sessions
                         <span class="text-muted" style="font-weight:400;font-size:0.8rem;">
-                            (required when Scope = Session)
+                            (select one or more)
                         </span>
                     </label>
-                    <input type="text" wicket:id="scopeSessionId"
-                           class="form-control form-control-sm font-monospace tmpl-scope-session-id"
-                           placeholder="e.g. FIX.4.4:SIMULATOR->EXCHANGE"/>
+                    <div wicket:id="scopeSessionIds" class="d-flex flex-wrap gap-1"
+                         style="font-size:0.85rem;"></div>
+                    <div class="form-text text-danger tmpl-scope-sessions-error"
+                         style="display:none;">
+                        At least one session must be selected.
+                    </div>
                 </div>
 
             </div>

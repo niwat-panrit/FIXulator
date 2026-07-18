@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.pages;
 
 import com.npsoftdev.fixsimulator.FixSimulatorApplication;
+import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.template.FieldSpec;
 import com.npsoftdev.fixsimulator.template.FieldValue;
 import com.npsoftdev.fixsimulator.template.FixMessageTemplate;
@@ -12,10 +13,12 @@ import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.attributes.AjaxCallListener;
 import org.apache.wicket.ajax.attributes.AjaxRequestAttributes;
+import org.apache.wicket.ajax.form.AjaxFormComponentUpdatingBehavior;
 import org.apache.wicket.ajax.markup.html.AjaxLink;
 import org.apache.wicket.ajax.markup.html.form.AjaxButton;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
+import org.apache.wicket.markup.html.form.CheckBoxMultipleChoice;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.form.NumberTextField;
@@ -98,8 +101,35 @@ public class OrderTemplatesPage extends BasePage {
         modalForm.add(new TextField<String>("description"));
         modalForm.add(new TextField<String>("beginString"));
         modalForm.add(new TextField<String>("msgType"));
-        modalForm.add(new DropDownChoice<>("scopeType", List.of("Global", "Session")));
-        modalForm.add(new TextField<String>("scopeSessionId"));
+        WebMarkupContainer sessionPickerContainer = new WebMarkupContainer("sessionPickerContainer") {
+            @Override
+            protected void onConfigure() {
+                super.onConfigure();
+                setVisible("Sessions".equals(formModel.scopeType));
+            }
+        };
+        sessionPickerContainer.setOutputMarkupPlaceholderTag(true);
+
+        CheckBoxMultipleChoice<String> sessionPicker = new CheckBoxMultipleChoice<>(
+                "scopeSessionIds",
+                new PropertyModel<>(formModel, "scopeSessionIds"),
+                new LoadableDetachableModel<>() {
+                    @Override protected List<String> load() { return availableSessionIds(); }
+                });
+        sessionPicker.setPrefix("<div class=\"form-check\">");
+        sessionPicker.setSuffix("</div>");
+        sessionPickerContainer.add(sessionPicker);
+        modalForm.add(sessionPickerContainer);
+
+        DropDownChoice<String> scopeTypeChoice = new DropDownChoice<>("scopeType",
+                List.of("Global", "Sessions"));
+        scopeTypeChoice.add(new AjaxFormComponentUpdatingBehavior("change") {
+            @Override
+            protected void onUpdate(AjaxRequestTarget target) {
+                target.add(sessionPickerContainer);
+            }
+        });
+        modalForm.add(scopeTypeChoice);
 
         // ── Empty fields row ──────────────────────────────────────────────────
         fieldsContainer.add(new WebMarkupContainer("emptyFieldsRow") {
@@ -216,10 +246,10 @@ public class OrderTemplatesPage extends BasePage {
                     return;
                 }
 
-                TemplateScope scope = "Session".equals(formModel.scopeType)
-                        && formModel.scopeSessionId != null
-                        && !formModel.scopeSessionId.isBlank()
-                        ? TemplateScope.session(formModel.scopeSessionId)
+                TemplateScope scope = "Sessions".equals(formModel.scopeType)
+                        && formModel.scopeSessionIds != null
+                        && !formModel.scopeSessionIds.isEmpty()
+                        ? TemplateScope.sessions(formModel.scopeSessionIds)
                         : TemplateScope.global();
 
                 FixMessageTemplate.Builder builder = FixMessageTemplate.builder()
@@ -351,6 +381,14 @@ public class OrderTemplatesPage extends BasePage {
         return ((FixSimulatorApplication) Application.get()).getTemplateService();
     }
 
+    private static List<String> availableSessionIds() {
+        ConnectionService cs = ((FixSimulatorApplication) Application.get()).getConnectionService();
+        if (cs == null) return List.of();
+        List<String> ids = new ArrayList<>(cs.listSessionIds());
+        Collections.sort(ids);
+        return ids;
+    }
+
     // ── Form models ───────────────────────────────────────────────────────────
 
     static class TemplateFormModel implements Serializable {
@@ -362,7 +400,7 @@ public class OrderTemplatesPage extends BasePage {
         String beginString = "FIX.4.4";
         String msgType = "";
         String scopeType = "Global";
-        String scopeSessionId = "";
+        List<String> scopeSessionIds = new ArrayList<>();
         List<FieldFormRow> fields = new ArrayList<>();
 
         void reset() {
@@ -372,7 +410,7 @@ public class OrderTemplatesPage extends BasePage {
             beginString = "FIX.4.4";
             msgType = "";
             scopeType = "Global";
-            scopeSessionId = "";
+            scopeSessionIds = new ArrayList<>();
             fields = new ArrayList<>();
         }
 
@@ -382,12 +420,12 @@ public class OrderTemplatesPage extends BasePage {
             description = t.description();
             beginString = t.beginString();
             msgType = t.msgType();
-            if (t.scope() instanceof TemplateScope.Session s) {
-                scopeType = "Session";
-                scopeSessionId = s.sessionId();
+            if (t.scope() instanceof TemplateScope.Sessions s) {
+                scopeType = "Sessions";
+                scopeSessionIds = new ArrayList<>(s.sessionIds());
             } else {
                 scopeType = "Global";
-                scopeSessionId = "";
+                scopeSessionIds = new ArrayList<>();
             }
             fields = new ArrayList<>();
             for (FieldSpec spec : t.fields()) {

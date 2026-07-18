@@ -217,6 +217,7 @@ public abstract class BasePage extends WebPage {
                         log.info("Active FIX session switched: user='{}' from='{}' to='{}'",
                                 u != null ? u.username() : "unknown", previousSessionId, sd.sessionId());
                         target.add(topbarNav);
+                        onSessionSwitched(target);
                         target.appendJavaScript(
                                 "document.querySelectorAll('.dropdown-menu.show').forEach(function(m){" +
                                 "  m.classList.remove('show');" +
@@ -351,6 +352,14 @@ public abstract class BasePage extends WebPage {
                 item.add(link);
             }
         };
+    }
+
+    /**
+     * Called after the active FIX session has been changed via the topbar switcher.
+     * Subclasses can override to refresh session-dependent components via AJAX.
+     */
+    protected void onSessionSwitched(AjaxRequestTarget target) {
+        // no-op by default
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

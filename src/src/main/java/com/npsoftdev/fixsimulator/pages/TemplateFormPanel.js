@@ -88,11 +88,16 @@
         }
 
         var scopeTypeEl = document.querySelector('.tmpl-scope-type');
-        var scopeSessionIdEl = document.querySelector('.tmpl-scope-session-id');
-        if (scopeTypeEl && scopeTypeEl.value === 'Session' &&
-                scopeSessionIdEl && !scopeSessionIdEl.value.trim()) {
-            markInvalid(scopeSessionIdEl, 'Session ID is required when Scope is \u201cSession\u201d.');
-            errors.push('Session ID is required when Scope is \u201cSession\u201d.');
+        if (scopeTypeEl && scopeTypeEl.value === 'Sessions') {
+            var checked = document.querySelectorAll(
+                'input[name$="scopeSessionIds"]:checked').length;
+            var errHint = document.querySelector('.tmpl-scope-sessions-error');
+            if (checked === 0) {
+                if (errHint) errHint.style.display = '';
+                errors.push('At least one session must be selected when Scope is \u201cSessions\u201d.');
+            } else {
+                if (errHint) errHint.style.display = 'none';
+            }
         }
 
         // ── Field rows ────────────────────────────────────────────────────────
