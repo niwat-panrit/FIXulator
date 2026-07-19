@@ -20,6 +20,7 @@ import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
+import org.apache.wicket.markup.html.form.IChoiceRenderer;
 import org.apache.wicket.markup.html.form.NumberTextField;
 import org.apache.wicket.markup.html.form.TextField;
 import org.apache.wicket.markup.html.list.ListItem;
@@ -72,16 +73,28 @@ public class OrdersPage extends BasePage {
 
         FilterModel filter = new FilterModel();
 
-        // ── Pre-load templates so extra-fields are available at construction time
+        // ── Pre-load templates so extra-fields and choices are available at construction time
         FixMessageTemplate nosTmpl = findTemplate("D");
         if (nosTmpl != null) {
-            newOrderModel.templateId   = nosTmpl.id();
-            newOrderModel.extraFields  = loadExtraFields(nosTmpl);
+            newOrderModel.templateId    = nosTmpl.id();
+            newOrderModel.extraFields   = loadExtraFields(nosTmpl);
+            newOrderModel.sideChoices    = loadChoicesForTag(nosTmpl, 54, DEFAULT_SIDE_CHOICES);
+            newOrderModel.ordTypeChoices = loadChoicesForTag(nosTmpl, 40, DEFAULT_ORD_TYPE_CHOICES);
+            newOrderModel.tifChoices     = loadChoicesForTag(nosTmpl, 59, DEFAULT_TIF_CHOICES);
+            newOrderModel.side           = firstKey(newOrderModel.sideChoices,    "1");
+            newOrderModel.ordType        = firstKey(newOrderModel.ordTypeChoices, "2");
+            newOrderModel.timeInForce    = firstKey(newOrderModel.tifChoices,     "0");
         }
         FixMessageTemplate ocrTmpl = findTemplate("G");
         if (ocrTmpl != null) {
-            amendModel.templateId  = ocrTmpl.id();
-            amendModel.extraFields = loadExtraFields(ocrTmpl);
+            amendModel.templateId    = ocrTmpl.id();
+            amendModel.extraFields   = loadExtraFields(ocrTmpl);
+            amendModel.sideChoices    = loadChoicesForTag(ocrTmpl, 54, DEFAULT_SIDE_CHOICES);
+            amendModel.ordTypeChoices = loadChoicesForTag(ocrTmpl, 40, DEFAULT_ORD_TYPE_CHOICES);
+            amendModel.tifChoices     = loadChoicesForTag(ocrTmpl, 59, DEFAULT_TIF_CHOICES);
+            amendModel.side           = firstKey(amendModel.sideChoices,    "1");
+            amendModel.ordType        = firstKey(amendModel.ordTypeChoices, "2");
+            amendModel.timeInForce    = firstKey(amendModel.tifChoices,     "0");
         }
 
         // ── Build amend form first so the amend button can reference it ─────────
@@ -155,13 +168,13 @@ public class OrdersPage extends BasePage {
                     public void onClick(AjaxRequestTarget target) {
                         amendModel.origClOrdId  = clOrdId;
                         amendModel.symbol       = o.getOrDefault(55, "");
-                        amendModel.side         = displaySide(o.getOrDefault(54, "1"));
+                        amendModel.side         = o.getOrDefault(54, firstKey(amendModel.sideChoices,    "1"));
                         String rawQty = o.getOrDefault(38, "");
                         amendModel.quantity     = blank(rawQty) ? null : new BigDecimal(rawQty);
                         String rawPx = o.getOrDefault(44, "");
                         amendModel.price        = blank(rawPx)  ? null : new BigDecimal(rawPx);
-                        amendModel.ordType      = displayOrdType(o.getOrDefault(40, "2"));
-                        amendModel.timeInForce  = displayTif(o.getOrDefault(59, "0"));
+                        amendModel.ordType      = o.getOrDefault(40, firstKey(amendModel.ordTypeChoices, "2"));
+                        amendModel.timeInForce  = o.getOrDefault(59, firstKey(amendModel.tifChoices,     "0"));
                         amendModel.extraFields.forEach(
                                 e -> e.value = e.defaultValue != null ? e.defaultValue : "");
                         target.add(amendOrderForm);
@@ -242,12 +255,24 @@ public class OrdersPage extends BasePage {
     protected void onSessionSwitched(AjaxRequestTarget target) {
         // Re-associate templates with the new active session
         FixMessageTemplate nosTmpl = findTemplate("D");
-        newOrderModel.templateId  = nosTmpl != null ? nosTmpl.id() : null;
-        newOrderModel.extraFields = loadExtraFields(nosTmpl);
+        newOrderModel.templateId    = nosTmpl != null ? nosTmpl.id() : null;
+        newOrderModel.extraFields   = loadExtraFields(nosTmpl);
+        newOrderModel.sideChoices    = loadChoicesForTag(nosTmpl, 54, DEFAULT_SIDE_CHOICES);
+        newOrderModel.ordTypeChoices = loadChoicesForTag(nosTmpl, 40, DEFAULT_ORD_TYPE_CHOICES);
+        newOrderModel.tifChoices     = loadChoicesForTag(nosTmpl, 59, DEFAULT_TIF_CHOICES);
+        newOrderModel.side           = firstKey(newOrderModel.sideChoices,    "1");
+        newOrderModel.ordType        = firstKey(newOrderModel.ordTypeChoices, "2");
+        newOrderModel.timeInForce    = firstKey(newOrderModel.tifChoices,     "0");
 
         FixMessageTemplate ocrTmpl = findTemplate("G");
-        amendModel.templateId  = ocrTmpl != null ? ocrTmpl.id() : null;
-        amendModel.extraFields = loadExtraFields(ocrTmpl);
+        amendModel.templateId    = ocrTmpl != null ? ocrTmpl.id() : null;
+        amendModel.extraFields   = loadExtraFields(ocrTmpl);
+        amendModel.sideChoices    = loadChoicesForTag(ocrTmpl, 54, DEFAULT_SIDE_CHOICES);
+        amendModel.ordTypeChoices = loadChoicesForTag(ocrTmpl, 40, DEFAULT_ORD_TYPE_CHOICES);
+        amendModel.tifChoices     = loadChoicesForTag(ocrTmpl, 59, DEFAULT_TIF_CHOICES);
+        amendModel.side           = firstKey(amendModel.sideChoices,    "1");
+        amendModel.ordType        = firstKey(amendModel.ordTypeChoices, "2");
+        amendModel.timeInForce    = firstKey(amendModel.tifChoices,     "0");
 
         target.add(newOrderToolbarBtn);
         target.add(tableBody);
@@ -310,15 +335,29 @@ public class OrdersPage extends BasePage {
         form.add(feedback);
 
         form.add(new TextField<String>("symbol").setRequired(true));
-        form.add(new DropDownChoice<>("side", List.of("BUY", "SELL")).setRequired(true));
+
+        DropDownChoice<String> sideDd = new DropDownChoice<>("side", List.of(),
+                rendererFor(() -> model.sideChoices));
+        sideDd.setChoices(() -> model.sideChoices.stream().map(FieldChoice::key).collect(Collectors.toList()));
+        sideDd.setRequired(true);
+        form.add(sideDd);
+
         form.add(new NumberTextField<BigDecimal>("quantity", BigDecimal.class)
                 .setMinimum(BigDecimal.ONE).setRequired(true));
         form.add(new NumberTextField<BigDecimal>("price", BigDecimal.class)
                 .setMinimum(BigDecimal.ZERO));
-        form.add(new DropDownChoice<>("ordType",
-                List.of("Limit", "Market", "Stop", "StopLimit")).setRequired(true));
-        form.add(new DropDownChoice<>("timeInForce",
-                List.of("Day", "GTC", "IOC", "FOK")).setRequired(true));
+
+        DropDownChoice<String> ordTypeDd = new DropDownChoice<>("ordType", List.of(),
+                rendererFor(() -> model.ordTypeChoices));
+        ordTypeDd.setChoices(() -> model.ordTypeChoices.stream().map(FieldChoice::key).collect(Collectors.toList()));
+        ordTypeDd.setRequired(true);
+        form.add(ordTypeDd);
+
+        DropDownChoice<String> tifDd = new DropDownChoice<>("timeInForce", List.of(),
+                rendererFor(() -> model.tifChoices));
+        tifDd.setChoices(() -> model.tifChoices.stream().map(FieldChoice::key).collect(Collectors.toList()));
+        tifDd.setRequired(true);
+        form.add(tifDd);
 
         // Extra fields from template (non-standard UserInput / Enumeration)
         WebMarkupContainer extraSection = new WebMarkupContainer("newOrderExtraSection") {
@@ -364,11 +403,11 @@ public class OrdersPage extends BasePage {
                                 sessionId, model.symbol, model.side, model.quantity, model.price);
                         Map<Integer, String> fields = new HashMap<>();
                         fields.put(55, model.symbol);
-                        fields.put(54, sideCode(model.side));
+                        fields.put(54, model.side);
                         fields.put(38, model.quantity.toPlainString());
                         if (model.price != null) fields.put(44, model.price.toPlainString());
-                        fields.put(40, ordTypeCode(model.ordType));
-                        fields.put(59, tifCode(model.timeInForce));
+                        fields.put(40, model.ordType);
+                        fields.put(59, model.timeInForce);
                         os.sendNewOrder(sessionId, fields);
                     }
                     model.reset();
@@ -400,15 +439,29 @@ public class OrdersPage extends BasePage {
         form.add(new Label("origClOrdIdDisplay",
                 new PropertyModel<String>(model, "origClOrdId")));
         form.add(new TextField<String>("symbol").setRequired(true));
-        form.add(new DropDownChoice<>("side", List.of("BUY", "SELL")).setRequired(true));
+
+        DropDownChoice<String> aSideDd = new DropDownChoice<>("side", List.of(),
+                rendererFor(() -> model.sideChoices));
+        aSideDd.setChoices(() -> model.sideChoices.stream().map(FieldChoice::key).collect(Collectors.toList()));
+        aSideDd.setRequired(true);
+        form.add(aSideDd);
+
         form.add(new NumberTextField<BigDecimal>("quantity", BigDecimal.class)
                 .setMinimum(BigDecimal.ONE).setRequired(true));
         form.add(new NumberTextField<BigDecimal>("price", BigDecimal.class)
                 .setMinimum(BigDecimal.ZERO));
-        form.add(new DropDownChoice<>("ordType",
-                List.of("Limit", "Market", "Stop", "StopLimit")).setRequired(true));
-        form.add(new DropDownChoice<>("timeInForce",
-                List.of("Day", "GTC", "IOC", "FOK")).setRequired(true));
+
+        DropDownChoice<String> aOrdTypeDd = new DropDownChoice<>("ordType", List.of(),
+                rendererFor(() -> model.ordTypeChoices));
+        aOrdTypeDd.setChoices(() -> model.ordTypeChoices.stream().map(FieldChoice::key).collect(Collectors.toList()));
+        aOrdTypeDd.setRequired(true);
+        form.add(aOrdTypeDd);
+
+        DropDownChoice<String> aTifDd = new DropDownChoice<>("timeInForce", List.of(),
+                rendererFor(() -> model.tifChoices));
+        aTifDd.setChoices(() -> model.tifChoices.stream().map(FieldChoice::key).collect(Collectors.toList()));
+        aTifDd.setRequired(true);
+        form.add(aTifDd);
 
         WebMarkupContainer extraSection = new WebMarkupContainer("amendExtraSection") {
             @Override
@@ -482,9 +535,14 @@ public class OrdersPage extends BasePage {
 
         WebMarkupContainer enumDiv = new WebMarkupContainer("extraEnumDiv");
         enumDiv.setVisible(entry.type == ExtraEntry.Type.ENUM);
+        // Parse KEY:VALUE options — backward compatible with plain-value options (key == label)
+        List<FieldChoice> parsedChoices = (entry.options == null ? List.<String>of() : entry.options)
+                .stream().map(OrdersPage::parseChoice).collect(Collectors.toList());
+        List<String> choiceKeys = parsedChoices.stream().map(FieldChoice::key).collect(Collectors.toList());
         enumDiv.add(new DropDownChoice<>("extraFieldEnum",
                 new PropertyModel<>(entry, "value"),
-                entry.options != null ? entry.options : List.of()));
+                choiceKeys,
+                rendererFor(() -> parsedChoices)));
         item.add(enumDiv);
     }
 
@@ -521,11 +579,11 @@ public class OrdersPage extends BasePage {
     private static Map<String, String> buildNewOverrides(NewOrderModel model) {
         Map<String, String> overrides = new HashMap<>();
         if (!blank(model.symbol))      overrides.put("symbol",      model.symbol);
-        if (!blank(model.side))        overrides.put("side",        sideCode(model.side));
+        if (!blank(model.side))        overrides.put("side",        model.side);
         if (model.quantity != null)    overrides.put("quantity",    model.quantity.toPlainString());
         if (model.price != null)       overrides.put("price",       model.price.toPlainString());
-        if (!blank(model.ordType))     overrides.put("ordType",     ordTypeCode(model.ordType));
-        if (!blank(model.timeInForce)) overrides.put("timeInForce", tifCode(model.timeInForce));
+        if (!blank(model.ordType))     overrides.put("ordType",     model.ordType);
+        if (!blank(model.timeInForce)) overrides.put("timeInForce", model.timeInForce);
         for (ExtraEntry e : model.extraFields) {
             if (!blank(e.value)) overrides.put(e.name, e.value);
         }
@@ -536,11 +594,11 @@ public class OrdersPage extends BasePage {
         Map<String, String> overrides = new HashMap<>();
         if (!blank(model.origClOrdId))  overrides.put("origClOrdId",  model.origClOrdId);
         if (!blank(model.symbol))       overrides.put("symbol",       model.symbol);
-        if (!blank(model.side))         overrides.put("side",         sideCode(model.side));
+        if (!blank(model.side))         overrides.put("side",         model.side);
         if (model.quantity != null)     overrides.put("quantity",     model.quantity.toPlainString());
         if (model.price != null)        overrides.put("price",        model.price.toPlainString());
-        if (!blank(model.ordType))      overrides.put("ordType",      ordTypeCode(model.ordType));
-        if (!blank(model.timeInForce))  overrides.put("timeInForce",  tifCode(model.timeInForce));
+        if (!blank(model.ordType))      overrides.put("ordType",      model.ordType);
+        if (!blank(model.timeInForce))  overrides.put("timeInForce",  model.timeInForce);
         for (ExtraEntry e : model.extraFields) {
             if (!blank(e.value)) overrides.put(e.name, e.value);
         }
@@ -668,27 +726,74 @@ public class OrdersPage extends BasePage {
         return s == null || s.isBlank();
     }
 
-    // ── FIX code mapping ──────────────────────────────────────────────────────
+    // ── Field choices ─────────────────────────────────────────────────────────
 
-    private static String sideCode(String side) {
-        return "SELL".equals(side) ? "2" : "1";
+    /** A single dropdown option pairing its FIX wire value (key) with a display label. */
+    record FieldChoice(String key, String label) implements Serializable {}
+
+    private static final List<FieldChoice> DEFAULT_SIDE_CHOICES = List.of(
+            new FieldChoice("1", "Buy"), new FieldChoice("2", "Sell"));
+
+    private static final List<FieldChoice> DEFAULT_ORD_TYPE_CHOICES = List.of(
+            new FieldChoice("2", "Limit"),   new FieldChoice("1", "Market"),
+            new FieldChoice("3", "Stop"),    new FieldChoice("4", "StopLimit"));
+
+    private static final List<FieldChoice> DEFAULT_TIF_CHOICES = List.of(
+            new FieldChoice("0", "Day"),     new FieldChoice("1", "GTC"),
+            new FieldChoice("3", "IOC"),     new FieldChoice("4", "FOK"));
+
+    /**
+     * Parses a {@code "KEY:LABEL"} or plain {@code "KEY"} option string into a
+     * {@link FieldChoice}.  Plain values (no colon) produce key == label, preserving
+     * backward compatibility with templates that predate the KEY:LABEL format.
+     */
+    private static FieldChoice parseChoice(String raw) {
+        int colon = raw.indexOf(':');
+        return colon > 0
+                ? new FieldChoice(raw.substring(0, colon).trim(), raw.substring(colon + 1).trim())
+                : new FieldChoice(raw.trim(), raw.trim());
     }
 
-    private static String ordTypeCode(String ordType) {
-        return switch (ordType) {
-            case "Market"    -> "1";
-            case "Stop"      -> "3";
-            case "StopLimit" -> "4";
-            default          -> "2"; // Limit
-        };
+    /**
+     * Reads the first {@link FieldValue.Enumeration} field for {@code tag} from the
+     * template and returns its options parsed into {@link FieldChoice} pairs.
+     * Falls back to {@code defaults} if the template is {@code null} or doesn't
+     * define an Enumeration for that tag.
+     */
+    private static List<FieldChoice> loadChoicesForTag(FixMessageTemplate tmpl, int tag,
+                                                        List<FieldChoice> defaults) {
+        if (tmpl == null) return new ArrayList<>(defaults);
+        return tmpl.fields().stream()
+                .filter(fs -> fs.tag() == tag && fs.value() instanceof FieldValue.Enumeration)
+                .map(fs -> {
+                    List<FieldChoice> choices = ((FieldValue.Enumeration) fs.value()).options()
+                            .stream().map(OrdersPage::parseChoice).collect(Collectors.toList());
+                    return choices.isEmpty() ? new ArrayList<>(defaults) : choices;
+                })
+                .findFirst().orElse(new ArrayList<>(defaults));
     }
 
-    private static String tifCode(String tif) {
-        return switch (tif) {
-            case "GTC" -> "1";
-            case "IOC" -> "3";
-            case "FOK" -> "4";
-            default    -> "0"; // Day
+    /** Returns the key of the first choice, or {@code fallback} if the list is empty. */
+    private static String firstKey(List<FieldChoice> choices, String fallback) {
+        return choices.isEmpty() ? fallback : choices.get(0).key();
+    }
+
+    /**
+     * Creates a choice renderer that maps FIX-code keys to display labels by
+     * reading the choice list from a model at render time — so it stays correct
+     * after a session switch that replaces the choices list.
+     */
+    private static IChoiceRenderer<String> rendererFor(IModel<List<FieldChoice>> choicesModel) {
+        return new IChoiceRenderer<>() {
+            @Override
+            public Object getDisplayValue(String key) {
+                return choicesModel.getObject().stream()
+                        .filter(c -> c.key().equals(key))
+                        .map(FieldChoice::label)
+                        .findFirst().orElse(key);
+            }
+            @Override public String getIdValue(String key, int i)                                  { return key; }
+            @Override public String getObject(String id, IModel<? extends List<? extends String>> c) { return id; }
         };
     }
 
@@ -708,17 +813,23 @@ public class OrdersPage extends BasePage {
         private static final long serialVersionUID = 1L;
         String     templateId;
         String     symbol      = "";
-        String     side        = "BUY";
+        String     side        = "1";   // FIX code — "1" = Buy
         BigDecimal quantity    = BigDecimal.valueOf(100);
         BigDecimal price;
-        String     ordType     = "Limit";
-        String     timeInForce = "Day";
-        List<ExtraEntry> extraFields = new ArrayList<>();
+        String     ordType     = "2";   // FIX code — "2" = Limit
+        String     timeInForce = "0";   // FIX code — "0" = Day
+        List<ExtraEntry>   extraFields   = new ArrayList<>();
+        List<FieldChoice>  sideChoices    = new ArrayList<>(DEFAULT_SIDE_CHOICES);
+        List<FieldChoice>  ordTypeChoices = new ArrayList<>(DEFAULT_ORD_TYPE_CHOICES);
+        List<FieldChoice>  tifChoices     = new ArrayList<>(DEFAULT_TIF_CHOICES);
 
         void reset() {
-            symbol = ""; side = "BUY";
-            quantity = BigDecimal.valueOf(100); price = null;
-            ordType = "Limit"; timeInForce = "Day";
+            symbol = "";
+            side        = firstKey(sideChoices,    "1");
+            quantity    = BigDecimal.valueOf(100);
+            price       = null;
+            ordType     = firstKey(ordTypeChoices, "2");
+            timeInForce = firstKey(tifChoices,     "0");
             extraFields.forEach(e -> e.value = e.defaultValue != null ? e.defaultValue : "");
         }
     }
@@ -728,12 +839,15 @@ public class OrdersPage extends BasePage {
         String     templateId;
         String     origClOrdId;
         String     symbol      = "";
-        String     side        = "BUY";
+        String     side        = "1";   // FIX code — "1" = Buy
         BigDecimal quantity;
         BigDecimal price;
-        String     ordType     = "Limit";
-        String     timeInForce = "Day";
-        List<ExtraEntry> extraFields = new ArrayList<>();
+        String     ordType     = "2";   // FIX code — "2" = Limit
+        String     timeInForce = "0";   // FIX code — "0" = Day
+        List<ExtraEntry>   extraFields   = new ArrayList<>();
+        List<FieldChoice>  sideChoices    = new ArrayList<>(DEFAULT_SIDE_CHOICES);
+        List<FieldChoice>  ordTypeChoices = new ArrayList<>(DEFAULT_ORD_TYPE_CHOICES);
+        List<FieldChoice>  tifChoices     = new ArrayList<>(DEFAULT_TIF_CHOICES);
     }
 
     static class ExtraEntry implements Serializable {
