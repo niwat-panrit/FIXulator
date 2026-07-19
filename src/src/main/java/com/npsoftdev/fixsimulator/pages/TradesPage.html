@@ -5,6 +5,13 @@
     <!-- Page Header -->
     <div class="page-header">
         <h4><i class="bi bi-arrow-left-right me-2 text-primary"></i>Trades (Execution Reports)</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-primary"
+                    data-bs-toggle="offcanvas" data-bs-target="#composeOffcanvas"
+                    aria-controls="composeOffcanvas">
+                <i class="bi bi-pencil-square me-1"></i>Compose Message
+            </button>
+        </div>
     </div>
 
     <!-- Trades Table -->
@@ -119,6 +126,9 @@
             </nav>
         </div>
     </div>
+
+    <!-- ── Compose Message Panel (offcanvas + session info) ─────────────────── -->
+    <div wicket:id="composePanel"></div>
 
 </wicket:extend>
 </body>

@@ -11,7 +11,6 @@ import org.apache.wicket.ajax.AbstractAjaxTimerBehavior;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.form.AjaxFormComponentUpdatingBehavior;
 import org.apache.wicket.ajax.markup.html.AjaxLink;
-import org.apache.wicket.ajax.markup.html.form.AjaxButton;
 import org.apache.wicket.markup.ComponentTag;
 import org.apache.wicket.markup.head.IHeaderResponse;
 import org.apache.wicket.markup.head.JavaScriptReferenceHeaderItem;
@@ -20,14 +19,11 @@ import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.CheckBox;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
-import org.apache.wicket.markup.html.form.TextArea;
-import org.apache.wicket.markup.html.form.TextField;
 import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.PageableListView;
 import org.apache.wicket.model.CompoundPropertyModel;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.LoadableDetachableModel;
-import org.apache.wicket.model.Model;
 import org.apache.wicket.request.resource.PackageResourceReference;
 
 import java.io.Serializable;
@@ -71,14 +67,6 @@ public class FixActivityPage extends BasePage {
         private static final long serialVersionUID = 1L;
         String  direction      = "All";
         boolean hideHeartbeats = false;
-    }
-
-    // ── Compose model ─────────────────────────────────────────────────────────
-
-    static final class ComposeModel implements Serializable {
-        private static final long serialVersionUID = 1L;
-        String rawMessage = "";
-        String delimiter  = "|";
     }
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -245,37 +233,12 @@ public class FixActivityPage extends BasePage {
         });
         tableBody.add(activityList);
 
-        // ── Session info holder (data attributes read by compose JS) ──────────
-        WebMarkupContainer sessionInfoHolder = new WebMarkupContainer("sessionInfoHolder") {
-            @Override
-            protected void onComponentTag(ComponentTag tag) {
-                super.onComponentTag(tag);
-                String sid = FixSimulatorSession.get().getActiveSessionId();
-                tag.put("data-begin-string", "");
-                tag.put("data-sender", "");
-                tag.put("data-target", "");
-                ConnectionService cs = connSvc();
-                if (sid != null && cs != null) {
-                    cs.listSessions().stream()
-                      .filter(s -> s.sessionId().equals(sid))
-                      .findFirst()
-                      .ifPresent(s -> {
-                          tag.put("data-begin-string", s.fixVersion());
-                          tag.put("data-sender", s.senderCompID());
-                          tag.put("data-target", s.targetCompID());
-                      });
-                }
-            }
-        };
-        sessionInfoHolder.setOutputMarkupId(true);
-        add(sessionInfoHolder);
-
         // Auto-refresh every 3 s
         tableBody.add(new AbstractAjaxTimerBehavior(Duration.ofSeconds(3)) {
             @Override
             protected void onTimer(AjaxRequestTarget target) {
                 rowsModel.detach();
-                target.add(tableBody, pagingFooter, sessionInfoHolder);
+                target.add(tableBody, pagingFooter);
             }
         });
 
@@ -359,70 +322,8 @@ public class FixActivityPage extends BasePage {
         add(tableBody);
         add(pagingFooter);
 
-        // ── Compose form ───────────────────────────────────────────────────────
-        ComposeModel composeModel = new ComposeModel();
-        Form<ComposeModel> composeForm = new Form<>("composeForm",
-                new CompoundPropertyModel<>(composeModel));
-
-        TextArea<String> rawMsgArea = new TextArea<>("rawMessage");
-        rawMsgArea.setMarkupId("composeTextarea").setOutputMarkupId(true);
-        composeForm.add(rawMsgArea);
-
-        TextField<String> delimField = new TextField<>("delimiter");
-        delimField.setMarkupId("composeDelimiter").setOutputMarkupId(true);
-        composeForm.add(delimField);
-
-        // Feedback area
-        Model<String> resultClass = Model.of("d-none");
-        Model<String> resultMsg   = Model.of("");
-        WebMarkupContainer composeResult = new WebMarkupContainer("composeResult");
-        composeResult.add(AttributeModifier.replace("class", resultClass));
-        composeResult.setOutputMarkupId(true);
-        composeResult.add(new Label("composeResultMsg", resultMsg));
-        composeForm.add(composeResult);
-
-        composeForm.add(new AjaxButton("composeSendBtn", composeForm) {
-            @Override
-            protected void onSubmit(AjaxRequestTarget target) {
-                String sessionId = FixSimulatorSession.get().getActiveSessionId();
-                if (sessionId == null) {
-                    showFeedback(target, false, "No active session selected.");
-                    return;
-                }
-                ConnectionService cs = connSvc();
-                if (cs == null) {
-                    showFeedback(target, false, "Connection service unavailable.");
-                    return;
-                }
-                String raw = composeModel.rawMessage;
-                if (raw == null || raw.isBlank()) {
-                    showFeedback(target, false, "Raw FIX message is empty.");
-                    return;
-                }
-                String delim = (composeModel.delimiter == null || composeModel.delimiter.isEmpty())
-                        ? "|" : composeModel.delimiter;
-                try {
-                    cs.sendRaw(sessionId, raw, delim);
-                    showFeedback(target, true, "Message sent successfully.");
-                    rowsModel.detach();
-                    target.add(tableBody, pagingFooter);
-                } catch (Exception e) {
-                    showFeedback(target, false, "Send failed: " + e.getMessage());
-                }
-            }
-
-            @Override
-            protected void onError(AjaxRequestTarget target) { /* no validators wired */ }
-
-            private void showFeedback(AjaxRequestTarget target, boolean success, String msg) {
-                resultClass.setObject(
-                        "alert py-1 px-2 mt-2 mb-1 " + (success ? "alert-success" : "alert-danger"));
-                resultMsg.setObject(msg);
-                target.add(composeResult);
-            }
-        });
-
-        add(composeForm);
+        // ── Compose panel (offcanvas) ──────────────────────────────────────────
+        add(new ComposeMessagePanel("composePanel", tableBody, pagingFooter));
 
         // ── Clear log ──────────────────────────────────────────────────────────
         add(new AjaxLink<Void>("clearLogBtn") {

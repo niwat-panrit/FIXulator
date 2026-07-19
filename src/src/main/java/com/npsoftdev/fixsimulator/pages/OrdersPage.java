@@ -233,6 +233,9 @@ public class OrdersPage extends BasePage {
         newOrderForm.setOutputMarkupId(true);
         add(newOrderForm);
         add(amendOrderForm);
+
+        // ── Compose panel (offcanvas) ──────────────────────────────────────────
+        add(new ComposeMessagePanel("composePanel"));
     }
 
     @Override

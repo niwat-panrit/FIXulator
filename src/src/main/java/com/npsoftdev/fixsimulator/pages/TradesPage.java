@@ -187,6 +187,9 @@ public class TradesPage extends BasePage {
 
         add(filterForm);
         add(pagingFooter);
+
+        // ── Compose panel (offcanvas) ──────────────────────────────────────────
+        add(new ComposeMessagePanel("composePanel"));
     }
 
     // ── Filter helpers ────────────────────────────────────────────────────────

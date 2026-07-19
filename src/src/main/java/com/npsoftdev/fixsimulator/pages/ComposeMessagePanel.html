@@ -1,0 +1,87 @@
+<html xmlns:wicket="http://wicket.apache.org">
+<body>
+<wicket:panel>
+
+    <!-- Session info holder (JS reads active session's comp IDs from here) -->
+    <div wicket:id="sessionInfoHolder" id="activeSessionInfo" style="display:none;"></div>
+
+    <!-- ── Compose Message Offcanvas ─────────────────────────────────────────── -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="composeOffcanvas"
+         aria-labelledby="composeOffcanvasLabel" style="width:440px;">
+        <div class="offcanvas-header py-2 border-bottom">
+            <h6 class="offcanvas-title" id="composeOffcanvasLabel">
+                <i class="bi bi-pencil-square me-2 text-primary"></i>Compose &amp; Send Message
+            </h6>
+            <button type="button" class="btn-close"
+                    data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body p-3" style="overflow-y:auto;">
+
+            <form wicket:id="composeForm">
+
+                <!-- Raw message + delimiter label row -->
+                <div class="d-flex align-items-baseline gap-3 mb-1">
+                    <label class="form-label mb-0" style="font-size:0.8rem;">Raw FIX Message</label>
+                    <label class="form-label mb-0 text-muted ms-auto" style="font-size:0.75rem;">
+                        Delimiter
+                    </label>
+                    <input type="text" wicket:id="delimiter"
+                           class="form-control form-control-sm font-monospace"
+                           style="width:48px; text-align:center;" />
+                </div>
+                <textarea wicket:id="rawMessage"
+                          class="form-control font-monospace"
+                          rows="9" style="font-size:0.75rem; resize:vertical;"
+                          placeholder="35=D|55=AAPL|54=1|38=100|40=2|44=150.00|..."></textarea>
+
+                <!-- Action row -->
+                <div class="d-flex gap-2 mt-2 mb-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            id="composeParseBtnId">
+                        <i class="bi bi-braces me-1"></i>Parse
+                    </button>
+                    <span class="text-muted ms-1" style="font-size:0.74rem;">
+                        <i class="bi bi-info-circle me-1"></i>Session fields (8/49/56/34/52/10) are always set by the engine
+                    </span>
+                    <button wicket:id="composeSendBtn"
+                            class="btn btn-sm btn-primary ms-auto">
+                        <i class="bi bi-send me-1"></i>Send Message
+                    </button>
+                </div>
+
+                <!-- Send feedback -->
+                <div wicket:id="composeResult">
+                    <span wicket:id="composeResultMsg" style="font-size:0.82rem;"></span>
+                </div>
+
+                <!-- Parsed fields preview -->
+                <div class="table-card mt-2">
+                    <div class="table-card-header" style="border-radius:6px 6px 0 0;">
+                        <span style="font-size:0.78rem;">Parsed Fields</span>
+                    </div>
+                    <table class="table table-sm mb-0" style="font-size:0.78rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:45%;">Tag (Field)</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="composeFieldsBody">
+                            <tr>
+                                <td colspan="2" class="text-muted text-center py-2"
+                                    style="font-size:0.78rem;">
+                                    Click Parse to inspect fields
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+
+</wicket:panel>
+</body>
+</html>
