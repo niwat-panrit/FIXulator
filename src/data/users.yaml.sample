@@ -1,0 +1,8 @@
+users:
+- username: admin
+  displayName: Administrator
+  passwordHash: $2a$10$dkF.8SYNjVMEkYCIU2jHq.desKT9Idws30Ymb6I.FaiFODindHqKq
+  email: admin@fixsimulator.local
+  roles:
+  - Admin
+  - Tester
