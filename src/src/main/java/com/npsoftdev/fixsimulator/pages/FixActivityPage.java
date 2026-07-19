@@ -73,7 +73,10 @@ public class FixActivityPage extends BasePage {
 
     public FixActivityPage() {
         super();
+        FixSimulatorSession sess = FixSimulatorSession.get();
         FilterModel filter = new FilterModel();
+        filter.direction      = sess.getActivityDirection();
+        filter.hideHeartbeats = sess.isActivityHideHeartbeats();
 
         // ── Data model ─────────────────────────────────────────────────────────
         LoadableDetachableModel<List<ActivityRow>> rowsModel =
@@ -294,6 +297,7 @@ public class FixActivityPage extends BasePage {
         dirDD.add(new AjaxFormComponentUpdatingBehavior("change") {
             @Override
             protected void onUpdate(AjaxRequestTarget target) {
+                FixSimulatorSession.get().setActivityDirection(filter.direction);
                 activityList.setCurrentPage(0);
                 rowsModel.detach();
                 target.add(tableBody, pagingFooter);
@@ -305,6 +309,7 @@ public class FixActivityPage extends BasePage {
         hideHbCb.add(new AjaxFormComponentUpdatingBehavior("change") {
             @Override
             protected void onUpdate(AjaxRequestTarget target) {
+                FixSimulatorSession.get().setActivityHideHeartbeats(filter.hideHeartbeats);
                 activityList.setCurrentPage(0);
                 rowsModel.detach();
                 target.add(tableBody, pagingFooter);

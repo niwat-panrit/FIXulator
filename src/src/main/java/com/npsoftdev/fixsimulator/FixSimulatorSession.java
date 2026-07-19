@@ -26,6 +26,14 @@ public class FixSimulatorSession extends WebSession {
     /** The authenticated user, or {@code null} when not signed in. */
     private User authenticatedUser;
 
+    // ── FIX Activity page filter state ────────────────────────────────────────
+
+    /** Remembered direction filter for the FIX Activity page ("All", "Sent", "Received"). */
+    private String activityDirection = "All";
+
+    /** Whether heartbeat messages are hidden on the FIX Activity page. Defaults to {@code true}. */
+    private boolean activityHideHeartbeats = true;
+
     public FixSimulatorSession(Request request) {
         super(request);
     }
@@ -92,6 +100,20 @@ public class FixSimulatorSession extends WebSession {
         pendingFixMessage = null;
         dirty();
         return v;
+    }
+
+    public String getActivityDirection() { return activityDirection; }
+
+    public void setActivityDirection(String direction) {
+        this.activityDirection = direction;
+        dirty();
+    }
+
+    public boolean isActivityHideHeartbeats() { return activityHideHeartbeats; }
+
+    public void setActivityHideHeartbeats(boolean hide) {
+        this.activityHideHeartbeats = hide;
+        dirty();
     }
 
     /** Convenience accessor so components can call {@code FixSimulatorSession.get()} without casting. */
