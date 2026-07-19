@@ -124,8 +124,6 @@
         var sesBegin  = holder.getAttribute ? (holder.getAttribute('data-begin-string') || '') : '';
         var sesSender = holder.getAttribute ? (holder.getAttribute('data-sender') || '') : '';
         var sesTarget = holder.getAttribute ? (holder.getAttribute('data-target') || '') : '';
-        var doReplace = !!(document.getElementById('replaceSessionCb') || {}).checked;
-
         var sessionValues = { '8': sesBegin, '49': sesSender, '56': sesTarget,
                               '9': '', '34': '(auto)', '52': '(auto)', '10': '(auto)' };
 
@@ -142,12 +140,12 @@
             var isSessionTag = SESSION_TAGS[p.tag];
             var displayValue, note;
 
-            if (isSessionTag && doReplace && sessionValues[p.tag]) {
+            if (isSessionTag && sessionValues[p.tag]) {
                 displayValue = escHtml(sessionValues[p.tag]);
                 note = ' <span class="text-muted" style="font-size:0.72rem;">(from active session)</span>';
-            } else if (isSessionTag && doReplace) {
+            } else if (isSessionTag) {
                 displayValue = escHtml(p.value);
-                note = ' <span class="text-muted" style="font-size:0.72rem;">(will be replaced)</span>';
+                note = ' <span class="text-muted" style="font-size:0.72rem;">(set by engine)</span>';
             } else {
                 var dec = (VALUE_DECODERS[p.tag] || {})[p.value];
                 displayValue = dec
@@ -156,7 +154,7 @@
                 note = '';
             }
 
-            var rowCls = isSessionTag && doReplace ? ' class="text-muted"' : '';
+            var rowCls = isSessionTag ? ' class="text-muted"' : '';
             var tr = document.createElement('tr');
             tr.innerHTML =
                 '<td class="font-monospace"' + rowCls + '>' + escHtml(p.tag + name) + '</td>' +
@@ -165,17 +163,15 @@
         });
 
         // Append engine-auto fields that weren't in the message
-        if (doReplace) {
-            [{ tag: '34', label: 'MsgSeqNum' }, { tag: '52', label: 'SendingTime' }, { tag: '10', label: 'CheckSum' }]
-                .forEach(function (e) {
-                    if (pairs.some(function (p) { return p.tag === e.tag; })) return;
-                    var tr = document.createElement('tr');
-                    tr.innerHTML =
-                        '<td class="font-monospace text-muted">' + e.tag + ' (' + e.label + ')</td>' +
-                        '<td class="font-monospace text-muted" style="font-size:0.72rem;">(set by engine)</td>';
-                    tbody.appendChild(tr);
-                });
-        }
+        [{ tag: '34', label: 'MsgSeqNum' }, { tag: '52', label: 'SendingTime' }, { tag: '10', label: 'CheckSum' }]
+            .forEach(function (e) {
+                if (pairs.some(function (p) { return p.tag === e.tag; })) return;
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td class="font-monospace text-muted">' + e.tag + ' (' + e.label + ')</td>' +
+                    '<td class="font-monospace text-muted" style="font-size:0.72rem;">(set by engine)</td>';
+                tbody.appendChild(tr);
+            });
     }
 
     // ── Wire up all event listeners after DOM is ready ────────────────────────

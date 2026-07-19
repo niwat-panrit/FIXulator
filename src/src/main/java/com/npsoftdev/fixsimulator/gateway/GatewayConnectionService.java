@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -290,26 +289,8 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         });
     }
 
-    /**
-     * Per-thread header field overrides applied by {@link #applyPendingOverrides(Message)}
-     * inside the QFJ {@code toApp()} callback, after the engine sets its session fields but
-     * before the message is serialised for the wire.
-     */
-    static final ThreadLocal<Map<Integer, String>> PENDING_HEADER_OVERRIDES = new ThreadLocal<>();
-
-    /**
-     * Called from {@code DefaultFixGatewayPlugin.toApp()} to re-apply any user-specified
-     * comp-ID overrides that QFJ just overwrote with session values.
-     */
-    public static void applyPendingOverrides(Message message) {
-        Map<Integer, String> overrides = PENDING_HEADER_OVERRIDES.get();
-        if (overrides == null) return;
-        overrides.forEach((tag, value) -> message.getHeader().setString(tag, value));
-    }
-
     @Override
-    public void sendRaw(String sessionId, String rawMessage, String delimiter,
-                        boolean replaceSessionFields) {
+    public void sendRaw(String sessionId, String rawMessage, String delimiter) {
         SessionID sid = resolve(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown session: " + sessionId));
 
@@ -319,10 +300,8 @@ public class GatewayConnectionService implements ConnectionService, Serializable
                 : rawMessage.replace(delimiter, "\u0001");
         if (!soh.endsWith("\u0001")) soh += "\u0001";
 
-        // Build message; collect user's comp-ID values when override mode is on
         Message message = new Message();
         String msgType = null;
-        Map<Integer, String> compIdOverrides = new HashMap<>();
 
         for (String pair : soh.split("\u0001", -1)) {
             int eq = pair.indexOf('=');
@@ -333,12 +312,6 @@ public class GatewayConnectionService implements ConnectionService, Serializable
             String value = pair.substring(eq + 1);
 
             if (tag == MsgType.FIELD) { msgType = value; continue; }
-
-            // In override mode, save 49/56 to reapply via toApp(); skip all other engine tags
-            if (!replaceSessionFields && (tag == 49 || tag == 56)) {
-                compIdOverrides.put(tag, value);
-                continue;
-            }
             if (ENGINE_OWNED_TAGS.contains(tag)) continue;
 
             if (STANDARD_HEADER_TAGS.contains(tag)) {
@@ -351,15 +324,11 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         if (msgType == null) throw new IllegalArgumentException("FIX message is missing MsgType (tag 35)");
         message.getHeader().setString(MsgType.FIELD, msgType);
 
-        if (!compIdOverrides.isEmpty()) PENDING_HEADER_OVERRIDES.set(compIdOverrides);
         try {
-            log.info("Sending raw FIX message (MsgType={}, replaceSessionFields={}) to session {}",
-                    msgType, replaceSessionFields, sessionId);
+            log.info("Sending raw FIX message (MsgType={}) to session {}", msgType, sessionId);
             session.sendToTarget(message, sid);
         } catch (SessionNotFound e) {
             throw new RuntimeException("Session is not connected: " + sessionId, e);
-        } finally {
-            PENDING_HEADER_OVERRIDES.remove();
         }
     }
 

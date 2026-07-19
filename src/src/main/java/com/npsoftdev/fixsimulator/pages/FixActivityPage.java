@@ -77,9 +77,8 @@ public class FixActivityPage extends BasePage {
 
     static final class ComposeModel implements Serializable {
         private static final long serialVersionUID = 1L;
-        String  rawMessage           = "";
-        String  delimiter            = "|";
-        boolean replaceSessionFields = true;
+        String rawMessage = "";
+        String delimiter  = "|";
     }
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -373,10 +372,6 @@ public class FixActivityPage extends BasePage {
         delimField.setMarkupId("composeDelimiter").setOutputMarkupId(true);
         composeForm.add(delimField);
 
-        CheckBox replaceSessionFieldsCb = new CheckBox("replaceSessionFields");
-        replaceSessionFieldsCb.setMarkupId("replaceSessionCb").setOutputMarkupId(true);
-        composeForm.add(replaceSessionFieldsCb);
-
         // Feedback area
         Model<String> resultClass = Model.of("d-none");
         Model<String> resultMsg   = Model.of("");
@@ -407,7 +402,7 @@ public class FixActivityPage extends BasePage {
                 String delim = (composeModel.delimiter == null || composeModel.delimiter.isEmpty())
                         ? "|" : composeModel.delimiter;
                 try {
-                    cs.sendRaw(sessionId, raw, delim, composeModel.replaceSessionFields);
+                    cs.sendRaw(sessionId, raw, delim);
                     showFeedback(target, true, "Message sent successfully.");
                     rowsModel.detach();
                     target.add(tableBody, pagingFooter);
