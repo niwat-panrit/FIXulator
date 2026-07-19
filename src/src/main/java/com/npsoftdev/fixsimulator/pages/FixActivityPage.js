@@ -85,10 +85,14 @@
             .replace(/"/g, '&quot;');
     }
 
-    // ── Parse a pipe-delimited FIX string into an array of {tag, value} pairs ─
-    function parseFix(raw) {
+    // ── Parse a delimited FIX string into an array of {tag, value} pairs ──────
+    // delimiter defaults to '|'; pass '\x01' for real SOH messages
+    function parseFix(raw, delimiter) {
+        delimiter = delimiter || '|';
+        // Escape the delimiter for use in split (handle regex special chars)
+        var escaped = delimiter.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
         var pairs = [];
-        raw.split('|').forEach(function (chunk) {
+        raw.split(new RegExp(escaped)).forEach(function (chunk) {
             var eq = chunk.indexOf('=');
             if (eq < 1) return;
             pairs.push({ tag: chunk.substring(0, eq).trim(), value: chunk.substring(eq + 1) });
@@ -128,14 +132,33 @@
         });
     });
 
+    // Engine-owned tags that QuickFIX/J always sets from session config
+    var SESSION_TAGS = { '8': true, '9': true, '10': true, '34': true, '49': true, '52': true, '56': true };
+
     // ── Compose offcanvas: parse raw FIX into fields preview ─────────────────
     window.parseComposeMsg = function () {
-        var raw = (document.getElementById('composeTextarea') || {}).value || '';
-        var tbody = document.getElementById('composeFieldsBody');
+        var raw     = (document.getElementById('composeTextarea') || {}).value || '';
+        var delim   = ((document.getElementById('composeDelimiter') || {}).value || '').trim() || '|';
+        var tbody   = document.getElementById('composeFieldsBody');
         if (!tbody) return;
         tbody.innerHTML = '';
 
-        var pairs = parseFix(raw);
+        // Read active session info for field replacement display
+        var holder       = document.getElementById('activeSessionInfo') || {};
+        var sesBegin     = holder.getAttribute ? (holder.getAttribute('data-begin-string') || '') : '';
+        var sesSender    = holder.getAttribute ? (holder.getAttribute('data-sender') || '') : '';
+        var sesTarget    = holder.getAttribute ? (holder.getAttribute('data-target') || '') : '';
+        var doReplace    = (document.getElementById('replaceSessionCb') || {}).checked !== false;
+
+        // Build session override map for display
+        var sessionValues = { '8': sesBegin, '9': '', '49': sesSender, '56': sesTarget, '34': '(auto)', '52': '(auto)', '10': '(auto)' };
+
+        // Handle real SOH delimiter in pasted messages
+        if (raw.indexOf('\x01') !== -1 && delim !== '\x01') {
+            delim = '\x01';
+        }
+
+        var pairs = parseFix(raw, delim);
         if (pairs.length === 0) {
             tbody.innerHTML =
                 '<tr><td colspan="2" class="text-muted text-center py-2">' +
@@ -145,16 +168,50 @@
 
         pairs.forEach(function (p) {
             var name = TAG_NAMES[p.tag] ? ' (' + TAG_NAMES[p.tag] + ')' : '';
-            var dec  = (VALUE_DECODERS[p.tag] || {})[p.value];
-            var valDisplay = dec
-                ? escHtml(p.value) + ' <span class="text-muted">(' + escHtml(dec) + ')</span>'
-                : escHtml(p.value);
+            var isSessionTag = SESSION_TAGS[p.tag];
+
+            var displayValue, note;
+            if (isSessionTag && doReplace && sessionValues[p.tag]) {
+                // Show the value that will actually be sent (from active session)
+                displayValue = escHtml(sessionValues[p.tag]);
+                note = ' <span class="text-muted" style="font-size:0.72rem;">(from active session)</span>';
+            } else if (isSessionTag && doReplace) {
+                displayValue = escHtml(p.value);
+                note = ' <span class="text-muted" style="font-size:0.72rem;">(will be replaced)</span>';
+            } else {
+                var dec = (VALUE_DECODERS[p.tag] || {})[p.value];
+                displayValue = dec
+                    ? escHtml(p.value) + ' <span class="text-muted">(' + escHtml(dec) + ')</span>'
+                    : escHtml(p.value);
+                note = '';
+            }
+
+            var rowStyle = isSessionTag && doReplace ? ' class="text-muted"' : '';
             var tr = document.createElement('tr');
             tr.innerHTML =
-                '<td class="font-monospace">' + escHtml(p.tag + name) + '</td>' +
-                '<td class="font-monospace">' + valDisplay + '</td>';
+                '<td class="font-monospace"' + rowStyle + '>' + escHtml(p.tag + name) + '</td>' +
+                '<td class="font-monospace"' + rowStyle + '>' + displayValue + note + '</td>';
             tbody.appendChild(tr);
         });
+
+        // If "Replace session fields" is on, also show engine-managed tags that weren't in the message
+        if (doReplace) {
+            var ENGINE_DISPLAY = [
+                { tag: '34', label: 'MsgSeqNum' },
+                { tag: '52', label: 'SendingTime' },
+                { tag: '10', label: 'CheckSum' }
+            ];
+            ENGINE_DISPLAY.forEach(function (e) {
+                var alreadyShown = pairs.some(function (p) { return p.tag === e.tag; });
+                if (!alreadyShown) {
+                    var tr = document.createElement('tr');
+                    tr.innerHTML =
+                        '<td class="font-monospace text-muted">' + e.tag + ' (' + e.label + ')</td>' +
+                        '<td class="font-monospace text-muted"><span style="font-size:0.72rem;">(set by engine)</span></td>';
+                    tbody.appendChild(tr);
+                }
+            });
+        }
     };
 
 })();

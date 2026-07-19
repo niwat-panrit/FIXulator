@@ -1,8 +1,11 @@
 package com.npsoftdev.fixsimulator.gateway;
 
 import com.npsoftdev.fixsimulator.service.ConnectionService;
+import quickfix.Message;
 import quickfix.SessionID;
+import quickfix.SessionNotFound;
 import quickfix.SessionSettings;
+import quickfix.field.MsgType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -285,6 +288,70 @@ public class GatewayConnectionService implements ConnectionService, Serializable
             }
         });
     }
+
+    @Override
+    public void sendRaw(String sessionId, String rawMessage, String delimiter) {
+        SessionID sid = resolve(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown session: " + sessionId));
+
+        // Normalise delimiter → SOH
+        String soh = (delimiter == null || delimiter.isEmpty() || "\u0001".equals(delimiter))
+                ? rawMessage
+                : rawMessage.replace(delimiter, "\u0001");
+        if (!soh.endsWith("\u0001")) soh += "\u0001";
+
+        // Build message: route tag 35 to header, skip engine-owned tags, body for the rest
+        Message message = new Message();
+        String msgType = null;
+
+        for (String pair : soh.split("\u0001", -1)) {
+            int eq = pair.indexOf('=');
+            if (eq < 1) continue;
+            int tag;
+            try { tag = Integer.parseInt(pair.substring(0, eq).trim()); }
+            catch (NumberFormatException e) { continue; }
+            String value = pair.substring(eq + 1);
+
+            if (tag == MsgType.FIELD) { msgType = value; continue; }
+            if (ENGINE_OWNED_TAGS.contains(tag)) continue; // QFJ sets these at send-time
+
+            if (STANDARD_HEADER_TAGS.contains(tag)) {
+                message.getHeader().setString(tag, value);
+            } else {
+                message.setString(tag, value);
+            }
+        }
+
+        if (msgType == null) throw new IllegalArgumentException("FIX message is missing MsgType (tag 35)");
+        message.getHeader().setString(MsgType.FIELD, msgType);
+
+        try {
+            log.info("Sending raw FIX message (MsgType={}) to session {}", msgType, sessionId);
+            session.sendToTarget(message, sid);
+        } catch (SessionNotFound e) {
+            throw new RuntimeException("Session is not connected: " + sessionId, e);
+        }
+    }
+
+    /** Tags the QFJ engine always overwrites; excluded from user-supplied raw messages. */
+    private static final Set<Integer> ENGINE_OWNED_TAGS = Set.of(8, 9, 10, 34, 49, 52, 56);
+
+    /** Standard FIX header tags (excluding engine-owned ones) that belong in the message header. */
+    private static final Set<Integer> STANDARD_HEADER_TAGS = Set.of(
+            43,  // PossDupFlag
+            50,  // SenderSubID
+            57,  // TargetSubID
+            97,  // PossResend
+            115, // OnBehalfOfCompID
+            116, // DeliverToCompID
+            122, // OrigSendingTime
+            128, // DeliverToCompID (FIXT)
+            129, // DeliverToSubID
+            142, // SenderLocationID
+            143, // TargetLocationID
+            144, // OnBehalfOfLocationID
+            145  // DeliverToLocationID
+    );
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
