@@ -228,6 +228,9 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
     @Override
     public void toApp(Message message, SessionID sessionID) throws DoNotSend {
+        // Re-apply any comp-ID overrides the user requested via the compose panel.
+        // This runs after QFJ's initializeHeader() but before message.toString() for the wire.
+        GatewayConnectionService.applyPendingOverrides(message);
         if (messageLogService != null)
             messageLogService.record(sessionID, MessageLogService.Direction.SENT, message);
         String type = msgType(message);

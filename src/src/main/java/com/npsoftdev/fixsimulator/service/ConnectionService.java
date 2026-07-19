@@ -91,13 +91,18 @@ public interface ConnectionService {
      * Parses {@code rawMessage} (fields delimited by {@code delimiter}) into a FIX
      * {@link quickfix.Message} and sends it to the given session.
      *
-     * <p>Engine-owned tags (8 BeginString, 9 BodyLength, 10 CheckSum, 34 MsgSeqNum,
-     * 49 SenderCompID, 52 SendingTime, 56 TargetCompID) are stripped before sending —
-     * QuickFIX/J always overwrites them from the live session configuration.</p>
+     * <p>When {@code replaceSessionFields} is {@code true} (the normal case), engine-owned
+     * tags (8, 9, 10, 34, 49, 52, 56) are stripped and QuickFIX/J fills them from the live
+     * session configuration.</p>
+     *
+     * <p>When {@code replaceSessionFields} is {@code false} (override mode), the user's
+     * values for tags 49 (SenderCompID) and 56 (TargetCompID) are applied via the QFJ
+     * {@code toApp} callback so they reach the wire verbatim.  Tags 8, 9, 10, 34, and 52
+     * are still managed by QFJ.</p>
      *
      * @throws IllegalArgumentException if the session is not registered or tag 35 is absent
      * @throws RuntimeException         wrapping {@link quickfix.SessionNotFound} if the
      *                                  session is not connected
      */
-    void sendRaw(String sessionId, String rawMessage, String delimiter);
+    void sendRaw(String sessionId, String rawMessage, String delimiter, boolean replaceSessionFields);
 }

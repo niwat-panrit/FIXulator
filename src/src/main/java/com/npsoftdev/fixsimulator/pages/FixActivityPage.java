@@ -407,7 +407,7 @@ public class FixActivityPage extends BasePage {
                 String delim = (composeModel.delimiter == null || composeModel.delimiter.isEmpty())
                         ? "|" : composeModel.delimiter;
                 try {
-                    cs.sendRaw(sessionId, raw, delim);
+                    cs.sendRaw(sessionId, raw, delim, composeModel.replaceSessionFields);
                     showFeedback(target, true, "Message sent successfully.");
                     rowsModel.detach();
                     target.add(tableBody, pagingFooter);
