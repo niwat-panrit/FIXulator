@@ -136,9 +136,7 @@ public class FixActivityPage extends BasePage {
                             }
                         }
 
-                        // Service returns newest-first; reverse to oldest-at-top for reading
-                        Collections.reverse(rows);
-                        return rows;
+                        return rows; // service returns newest-first; latest activity at top
                     }
                 };
 
