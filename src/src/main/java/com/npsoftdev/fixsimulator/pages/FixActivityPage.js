@@ -86,22 +86,106 @@
     }
 
     // ── Parse a delimited FIX string into an array of {tag, value} pairs ──────
-    // delimiter defaults to '|'; pass '\x01' for real SOH messages
+    // delimiter defaults to '|'; auto-detected as SOH (\x01) when present in raw
     function parseFix(raw, delimiter) {
         delimiter = delimiter || '|';
-        // Escape the delimiter for use in split (handle regex special chars)
-        var escaped = delimiter.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
         var pairs = [];
-        raw.split(new RegExp(escaped)).forEach(function (chunk) {
+        // Use indexOf+slice loop to avoid any regex edge-cases with special delimiters
+        var start = 0;
+        while (start <= raw.length) {
+            var end = raw.indexOf(delimiter, start);
+            if (end === -1) end = raw.length;
+            var chunk = raw.substring(start, end);
             var eq = chunk.indexOf('=');
-            if (eq < 1) return;
-            pairs.push({ tag: chunk.substring(0, eq).trim(), value: chunk.substring(eq + 1) });
-        });
+            if (eq >= 1) {
+                pairs.push({ tag: chunk.substring(0, eq).trim(), value: chunk.substring(eq + 1) });
+            }
+            start = end + delimiter.length;
+        }
         return pairs;
     }
 
-    // ── Populate the message detail modal ─────────────────────────────────────
+    // Engine-owned tags that QuickFIX/J always sets from session config
+    var SESSION_TAGS = { '8': true, '9': true, '10': true, '34': true, '49': true, '52': true, '56': true };
+
+    // ── Compose offcanvas: parse raw FIX into fields preview ─────────────────
+    function parseComposeMsg() {
+        var raw     = (document.getElementById('composeTextarea') || {}).value || '';
+        var delim   = ((document.getElementById('composeDelimiter') || {}).value || '').trim() || '|';
+        var tbody   = document.getElementById('composeFieldsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        // Auto-detect real SOH messages
+        if (raw.indexOf('\x01') !== -1) delim = '\x01';
+
+        // Read active session info for field replacement display
+        var holder    = document.getElementById('activeSessionInfo') || {};
+        var sesBegin  = holder.getAttribute ? (holder.getAttribute('data-begin-string') || '') : '';
+        var sesSender = holder.getAttribute ? (holder.getAttribute('data-sender') || '') : '';
+        var sesTarget = holder.getAttribute ? (holder.getAttribute('data-target') || '') : '';
+        var doReplace = !!(document.getElementById('replaceSessionCb') || {}).checked;
+
+        var sessionValues = { '8': sesBegin, '49': sesSender, '56': sesTarget,
+                              '9': '', '34': '(auto)', '52': '(auto)', '10': '(auto)' };
+
+        var pairs = parseFix(raw, delim);
+        if (pairs.length === 0) {
+            tbody.innerHTML =
+                '<tr><td colspan="2" class="text-muted text-center py-2">' +
+                'No parseable fields found</td></tr>';
+            return;
+        }
+
+        pairs.forEach(function (p) {
+            var name = TAG_NAMES[p.tag] ? ' (' + TAG_NAMES[p.tag] + ')' : '';
+            var isSessionTag = SESSION_TAGS[p.tag];
+            var displayValue, note;
+
+            if (isSessionTag && doReplace && sessionValues[p.tag]) {
+                displayValue = escHtml(sessionValues[p.tag]);
+                note = ' <span class="text-muted" style="font-size:0.72rem;">(from active session)</span>';
+            } else if (isSessionTag && doReplace) {
+                displayValue = escHtml(p.value);
+                note = ' <span class="text-muted" style="font-size:0.72rem;">(will be replaced)</span>';
+            } else {
+                var dec = (VALUE_DECODERS[p.tag] || {})[p.value];
+                displayValue = dec
+                    ? escHtml(p.value) + ' <span class="text-muted">(' + escHtml(dec) + ')</span>'
+                    : escHtml(p.value);
+                note = '';
+            }
+
+            var rowCls = isSessionTag && doReplace ? ' class="text-muted"' : '';
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td class="font-monospace"' + rowCls + '>' + escHtml(p.tag + name) + '</td>' +
+                '<td class="font-monospace"' + rowCls + '>' + displayValue + note + '</td>';
+            tbody.appendChild(tr);
+        });
+
+        // Append engine-auto fields that weren't in the message
+        if (doReplace) {
+            [{ tag: '34', label: 'MsgSeqNum' }, { tag: '52', label: 'SendingTime' }, { tag: '10', label: 'CheckSum' }]
+                .forEach(function (e) {
+                    if (pairs.some(function (p) { return p.tag === e.tag; })) return;
+                    var tr = document.createElement('tr');
+                    tr.innerHTML =
+                        '<td class="font-monospace text-muted">' + e.tag + ' (' + e.label + ')</td>' +
+                        '<td class="font-monospace text-muted" style="font-size:0.72rem;">(set by engine)</td>';
+                    tbody.appendChild(tr);
+                });
+        }
+    }
+
+    // ── Wire up all event listeners after DOM is ready ────────────────────────
     document.addEventListener('DOMContentLoaded', function () {
+
+        // Parse button — avoids inline onclick (blocked by CSP)
+        var parseBtn = document.getElementById('composeParseBtnId');
+        if (parseBtn) parseBtn.addEventListener('click', parseComposeMsg);
+
+        // Message detail modal
         var modal = document.getElementById('msgDetailModal');
         if (!modal) return;
 
@@ -110,10 +194,8 @@
             if (!btn) return;
             var raw = btn.getAttribute('data-raw') || '';
 
-            // Populate raw message textarea
             document.getElementById('modalRawMsg').value = raw;
 
-            // Populate parsed fields table
             var tbody = document.getElementById('modalFieldsBody');
             tbody.innerHTML = '';
 
@@ -131,87 +213,5 @@
             });
         });
     });
-
-    // Engine-owned tags that QuickFIX/J always sets from session config
-    var SESSION_TAGS = { '8': true, '9': true, '10': true, '34': true, '49': true, '52': true, '56': true };
-
-    // ── Compose offcanvas: parse raw FIX into fields preview ─────────────────
-    window.parseComposeMsg = function () {
-        var raw     = (document.getElementById('composeTextarea') || {}).value || '';
-        var delim   = ((document.getElementById('composeDelimiter') || {}).value || '').trim() || '|';
-        var tbody   = document.getElementById('composeFieldsBody');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-
-        // Read active session info for field replacement display
-        var holder       = document.getElementById('activeSessionInfo') || {};
-        var sesBegin     = holder.getAttribute ? (holder.getAttribute('data-begin-string') || '') : '';
-        var sesSender    = holder.getAttribute ? (holder.getAttribute('data-sender') || '') : '';
-        var sesTarget    = holder.getAttribute ? (holder.getAttribute('data-target') || '') : '';
-        var doReplace    = (document.getElementById('replaceSessionCb') || {}).checked !== false;
-
-        // Build session override map for display
-        var sessionValues = { '8': sesBegin, '9': '', '49': sesSender, '56': sesTarget, '34': '(auto)', '52': '(auto)', '10': '(auto)' };
-
-        // Handle real SOH delimiter in pasted messages
-        if (raw.indexOf('\x01') !== -1 && delim !== '\x01') {
-            delim = '\x01';
-        }
-
-        var pairs = parseFix(raw, delim);
-        if (pairs.length === 0) {
-            tbody.innerHTML =
-                '<tr><td colspan="2" class="text-muted text-center py-2">' +
-                'No parseable fields found</td></tr>';
-            return;
-        }
-
-        pairs.forEach(function (p) {
-            var name = TAG_NAMES[p.tag] ? ' (' + TAG_NAMES[p.tag] + ')' : '';
-            var isSessionTag = SESSION_TAGS[p.tag];
-
-            var displayValue, note;
-            if (isSessionTag && doReplace && sessionValues[p.tag]) {
-                // Show the value that will actually be sent (from active session)
-                displayValue = escHtml(sessionValues[p.tag]);
-                note = ' <span class="text-muted" style="font-size:0.72rem;">(from active session)</span>';
-            } else if (isSessionTag && doReplace) {
-                displayValue = escHtml(p.value);
-                note = ' <span class="text-muted" style="font-size:0.72rem;">(will be replaced)</span>';
-            } else {
-                var dec = (VALUE_DECODERS[p.tag] || {})[p.value];
-                displayValue = dec
-                    ? escHtml(p.value) + ' <span class="text-muted">(' + escHtml(dec) + ')</span>'
-                    : escHtml(p.value);
-                note = '';
-            }
-
-            var rowStyle = isSessionTag && doReplace ? ' class="text-muted"' : '';
-            var tr = document.createElement('tr');
-            tr.innerHTML =
-                '<td class="font-monospace"' + rowStyle + '>' + escHtml(p.tag + name) + '</td>' +
-                '<td class="font-monospace"' + rowStyle + '>' + displayValue + note + '</td>';
-            tbody.appendChild(tr);
-        });
-
-        // If "Replace session fields" is on, also show engine-managed tags that weren't in the message
-        if (doReplace) {
-            var ENGINE_DISPLAY = [
-                { tag: '34', label: 'MsgSeqNum' },
-                { tag: '52', label: 'SendingTime' },
-                { tag: '10', label: 'CheckSum' }
-            ];
-            ENGINE_DISPLAY.forEach(function (e) {
-                var alreadyShown = pairs.some(function (p) { return p.tag === e.tag; });
-                if (!alreadyShown) {
-                    var tr = document.createElement('tr');
-                    tr.innerHTML =
-                        '<td class="font-monospace text-muted">' + e.tag + ' (' + e.label + ')</td>' +
-                        '<td class="font-monospace text-muted"><span style="font-size:0.72rem;">(set by engine)</span></td>';
-                    tbody.appendChild(tr);
-                }
-            });
-        }
-    };
 
 })();
