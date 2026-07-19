@@ -128,3 +128,4 @@ jacoco.exec
 # Check in *.yaml.sample files instead as the canonical starting point.
 *.yaml
 !*.yaml.sample
+src/fix-gateway.cfg
