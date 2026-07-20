@@ -26,16 +26,23 @@ import com.npsoftdev.fixsimulator.service.TradeService;
 import com.npsoftdev.fixsimulator.template.DynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.TemplateService;
 import com.npsoftdev.fixsimulator.template.ValueMappingService;
+import com.npsoftdev.fixsimulator.persistence.YamlPersistenceService;
 import com.npsoftdev.fixsimulator.user.AuthService;
+import com.npsoftdev.fixsimulator.user.DefaultRememberMeService;
 import com.npsoftdev.fixsimulator.user.Permission;
+import com.npsoftdev.fixsimulator.user.RememberMeService;
 import com.npsoftdev.fixsimulator.user.UserRepository;
 import org.apache.wicket.ISessionListener;
+import org.apache.wicket.request.cycle.IRequestCycleListener;
+import org.apache.wicket.request.cycle.RequestCycle;
+import org.apache.wicket.request.http.WebRequest;
 import org.apache.wicket.Component;
 import org.apache.wicket.Page;
 import org.apache.wicket.RestartResponseAtInterceptPageException;
 import org.apache.wicket.RestartResponseException;
 import org.apache.wicket.Session;
 import org.apache.wicket.authorization.Action;
+import jakarta.servlet.http.Cookie;
 import org.apache.wicket.authorization.IAuthorizationStrategy;
 import org.apache.wicket.csp.CSPDirective;
 import org.apache.wicket.csp.CSPDirectiveSrcValue;
@@ -55,6 +62,9 @@ import java.nio.file.Paths;
 
 public class FixSimulatorApplication extends WebApplication {
 
+    /** Name of the persistent browser cookie that carries the remember-me token. */
+    public static final String REMEMBER_ME_COOKIE = "FIXSIM_REMEMBER_ME";
+
     private PluginRegistry pluginRegistry;
 
     // ── Services ──────────────────────────────────────────────────────────────
@@ -67,6 +77,7 @@ public class FixSimulatorApplication extends WebApplication {
     private DynamicValueRegistry dynamicValueRegistry;
     private UserRepository       userRepository;
     private AuthService          authService;
+    private RememberMeService    rememberMeService;
     private LogFileService       logFileService;
 
     // ── WebApplication ────────────────────────────────────────────────────────
@@ -98,6 +109,37 @@ public class FixSimulatorApplication extends WebApplication {
         pluginRegistry = new PluginRegistry();
         registerBuiltInPlugins();
         pluginRegistry.getPlugins().forEach(p -> p.initialize(this));
+
+        // Initialise persistent remember-me token store and purge stale entries
+        rememberMeService = new DefaultRememberMeService(
+                new YamlPersistenceService(resolveDataDirectory()));
+        rememberMeService.purgeExpired();
+
+        // Auto-login via remember-me cookie on every request when session is anonymous
+        getRequestCycleListeners().add(new IRequestCycleListener() {
+            @Override
+            public void onBeginRequest(RequestCycle cycle) {
+                FixSimulatorSession session = FixSimulatorSession.get();
+                if (session.isAuthenticated()) return;
+
+                WebRequest request = (WebRequest) cycle.getRequest();
+                Cookie cookie = request.getCookie(REMEMBER_ME_COOKIE);
+                if (cookie == null) return;
+
+                rememberMeService.resolveToken(cookie.getValue()).ifPresent(username -> {
+                    UserRepository repo = getUserRepository();
+                    AuthService    auth = getAuthService();
+                    if (repo == null || auth == null) return;
+                    repo.findByUsername(username).filter(u -> u.isActive()).ifPresent(user -> {
+                        if (auth.canStartSession(username)) {
+                            session.bind();
+                            session.signIn(user);
+                            auth.registerSession(username, session.getId());
+                        }
+                    });
+                });
+            }
+        });
 
         // Mount clean URLs for every page that has one
         pluginRegistry.getPlugins().stream()
@@ -179,6 +221,7 @@ public class FixSimulatorApplication extends WebApplication {
     public DynamicValueRegistry getDynamicValueRegistry() { return dynamicValueRegistry; }
     public UserRepository       getUserRepository()       { return userRepository; }
     public AuthService          getAuthService()          { return authService; }
+    public RememberMeService    getRememberMeService()    { return rememberMeService; }
     public LogFileService       getLogFileService()       { return logFileService; }
 
     /** Called by {@link DefaultFixGatewayPlugin#initialize}. */

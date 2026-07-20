@@ -3,10 +3,13 @@ package com.npsoftdev.fixsimulator.pages;
 import com.npsoftdev.fixsimulator.FixSimulatorApplication;
 import com.npsoftdev.fixsimulator.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.user.AuthService;
+import com.npsoftdev.fixsimulator.user.RememberMeService;
 import com.npsoftdev.fixsimulator.user.User;
+import jakarta.servlet.http.Cookie;
 import org.apache.wicket.markup.head.CssReferenceHeaderItem;
 import org.apache.wicket.markup.head.CssUrlReferenceHeaderItem;
 import org.apache.wicket.markup.head.IHeaderResponse;
+import org.apache.wicket.request.http.WebResponse;
 import org.apache.wicket.markup.html.WebPage;
 import org.apache.wicket.request.resource.PackageResourceReference;
 import org.apache.wicket.markup.html.form.Form;
@@ -65,6 +68,17 @@ public class LoginPage extends WebPage {
                 session.bind();
                 session.signIn(user);
                 authService.registerSession(user.username(), session.getId());
+
+                // Persist a remember-me token so the user stays signed in after restart
+                RememberMeService rms = app.getRememberMeService();
+                if (rms != null) {
+                    String token = rms.createToken(user.username());
+                    Cookie cookie = new Cookie(FixSimulatorApplication.REMEMBER_ME_COOKIE, token);
+                    cookie.setMaxAge(30 * 24 * 3600); // 30 days
+                    cookie.setHttpOnly(true);
+                    cookie.setPath("/");
+                    ((WebResponse) getRequestCycle().getResponse()).addCookie(cookie);
+                }
 
                 // continueToOriginalDestination() throws RestartResponseException when
                 // there is a saved destination; falls through when there is none.

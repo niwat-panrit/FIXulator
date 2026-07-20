@@ -9,7 +9,11 @@ import com.npsoftdev.fixsimulator.service.ConnectionService;
 import com.npsoftdev.fixsimulator.service.ConnectionService.SessionDetails;
 import com.npsoftdev.fixsimulator.user.AuthService;
 import com.npsoftdev.fixsimulator.user.Permission;
+import com.npsoftdev.fixsimulator.user.RememberMeService;
 import com.npsoftdev.fixsimulator.user.User;
+import jakarta.servlet.http.Cookie;
+import org.apache.wicket.request.http.WebRequest;
+import org.apache.wicket.request.http.WebResponse;
 import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
@@ -81,6 +85,21 @@ public abstract class BasePage extends WebPage {
                         auth.unregisterSession(user.username(), sess.getId());
                     }
                 }
+
+                // Delete the persistent remember-me token so the cookie cannot be replayed
+                RememberMeService rms = app().getRememberMeService();
+                if (rms != null) {
+                    WebRequest req = (WebRequest) getRequestCycle().getRequest();
+                    Cookie rmCookie = req.getCookie(FixSimulatorApplication.REMEMBER_ME_COOKIE);
+                    if (rmCookie != null) {
+                        rms.deleteToken(rmCookie.getValue());
+                        Cookie clear = new Cookie(FixSimulatorApplication.REMEMBER_ME_COOKIE, "");
+                        clear.setMaxAge(0);
+                        clear.setPath("/");
+                        ((WebResponse) getRequestCycle().getResponse()).addCookie(clear);
+                    }
+                }
+
                 sess.signOut();
                 sess.invalidate();
                 setResponsePage(LoginPage.class);
