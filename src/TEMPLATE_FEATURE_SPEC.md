@@ -1,371 +1,463 @@
-# FIX Message Template Feature — Implementation Spec
+# FIXulator — Application Specification
 
-> **Status:** Engine layer landed. UI layer not started.
+> **Purpose:** Living reference document for AI coding sessions.  Read this
+> before touching any code.  Update it whenever a significant feature is added
+> or changed.
 >
-> **Audience:** Claude Code session that will continue this work in the terminal.
-
-This document describes the FIX message template feature for FIXulator: what it
-is, why it exists, the architecture that's already in place, and the work that
-remains. Read this end-to-end before touching code.
+> **Last updated:** 2026-07-20
 
 ---
 
-## 1. Product intent
+## 1. What is FIXulator?
 
-FIX testers need to send New Order Single (D), OrderCancelReplaceRequest (G),
-and OrderCancelRequest (F) repeatedly with small variations. The previous form
-hard-coded a single message shape and forced the tester to retype dynamic
-values (ClOrdID, timestamps, ISIN) on every send.
+FIXulator is an embedded-Jetty web application that acts as a **FIX protocol
+initiator simulator**.  It lets QA engineers and developers:
 
-The template feature gives the tester:
-
-1. **Auto-filled dynamic values** — ClOrdID, TransactTime, SendingTime, UUID,
-   SenderCompID/TargetCompID — supplied at send-time by a placeholder resolver.
-2. **Mapped values** — derive one tag's value from another (canonical example:
-   tag 48 SecurityID = ISIN for the tag 55 Symbol the user typed).
-3. **Reusable templates** for any FIX message type, persisted across the
-   lifetime of the JVM (and later, across restarts).
-4. **Per-template + per-request customisation** — edit the template once,
-   override individual fields per send.
-5. **Scoping** — a template is either visible to every session (Global) or
-   only to one named session.
-6. **"Save as template" from history** — capture a previously-sent message
-   and promote it into a new template.
+- Manage one or more FIX sessions (connect, disconnect, configure).
+- Send New Order Single, Amend, and Cancel messages through templates or raw
+  compose.
+- Monitor inbound/outbound messages in real-time.
+- Track the full order lifecycle (New → PartFilled → Filled → Cancelled …).
+- Compose and send any arbitrary raw FIX message to the active session.
+- Template parameterised FIX messages with placeholders, user inputs,
+  value-mapped derived fields, and enumeration dropdowns.
 
 ---
 
-## 2. Architecture overview
+## 2. Tech Stack
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                       Wicket page (OrdersPage)                     │
-│                                                                    │
-│  template picker  ──►  dynamic form  ──►  send                     │
-│        │                                    │                      │
-│        │           ┌────────────────────────┴──────────┐           │
-│        ▼           ▼                                   ▼           │
-│  TemplateService.findVisibleTo   TemplateService.send              │
-└─────────────────────────────┬──────────────────────────────────────┘
-                              │
-                              ▼
-┌────────────────────────────────────────────────────────────────────┐
-│                       TemplateService (port)                       │
-│        composes Repository · Builder · Dispatcher · sessionIDs     │
-└────────────────────────────────────────────────────────────────────┘
-        │              │              │              │
-        ▼              ▼              ▼              ▼
-┌─────────────┐ ┌───────────────┐ ┌───────────┐ ┌───────────────────┐
-│ Template-   │ │ FixMessage-   │ │ Message-  │ │ Placeholder-      │
-│ Repository  │ │ Builder       │ │ Dispatcher│ │ Resolver +        │
-│             │ │               │ │           │ │ ValueMapping-     │
-│             │ │ resolves      │ │ → wire    │ │ Service           │
-│ persists    │ │ FieldSpecs    │ │           │ │                   │
-│ templates   │ │ in 2 passes   │ │ (Session- │ │ ORDER_ID,         │
-│             │ │ (deferred     │ │ Facade::  │ │ TRANSACT_TIME,    │
-│             │ │ Derived)      │ │ sendTo-   │ │ symbol→ISIN, …    │
-│             │ │               │ │ Target)   │ │                   │
-└─────────────┘ └───────────────┘ └───────────┘ └───────────────────┘
+| Layer | Technology |
+|---|---|
+| Language | Java 17 |
+| Build | Maven (fat JAR via Maven Shade plugin) |
+| HTTP server | Embedded Jetty (started by `Main.java`) |
+| Web framework | Apache Wicket 9.x (server-side component model) |
+| FIX engine | QuickFIX/J 2.3.1 (initiator mode) |
+| Serialisation | Jackson + jackson-dataformat-yaml |
+| Password hashing | jBCrypt |
+| CSS/JS | Bootstrap 5.3.3 + Bootstrap Icons 1.11.3 (CDN) |
+| Default port | 8080 (configurable via CLI argument to `Main`) |
+
+**Build and run:**
+```bash
+cd src
+mvn package -q
+java -jar target/fix-simulator.jar          # port 8080
+java -jar target/fix-simulator.jar 9090     # custom port
 ```
 
-Every box is a Java interface in `com.npsoftdev.fixsimulator.template` with a
-single default implementation. Swap any one for an alternative without
-touching the rest.
+**CSP policy:** `script-src 'self' https://cdn.jsdelivr.net` — no inline
+`onclick` or `<script>` blocks.  All JavaScript uses `addEventListener` in a
+`DOMContentLoaded` IIFE.
 
 ---
 
-## 3. What's already implemented (DO NOT REWRITE)
+## 3. Package Layout
 
-All under `src/src/main/java/com/npsoftdev/fixsimulator/template/`:
-
-| File | Role |
-| --- | --- |
-| `TemplateScope.java` | Sealed: `Global` singleton + `Session(sessionId)` record. Owns `appliesTo(SessionID)`. |
-| `PlaceholderType.java` | Enum: `ORDER_ID`, `TRANSACT_TIME`, `SENDING_TIME`, `UUID`, `SESSION_SENDER`, `SESSION_TARGET`. |
-| `FieldValue.java` | Sealed: `Literal`, `UserInput(name, defaultValue)`, `Placeholder(type)`, `Derived(sourceTag, mappingName)`. |
-| `FieldSpec.java` | Record `(tag, FieldValue)` with static convenience factories: `literal`, `userInput`, `placeholder`, `derived`. |
-| `FixMessageTemplate.java` | Immutable. `Builder` API. Holds `id`, `name`, `description`, `beginString`, `msgType`, `scope`, ordered `List<FieldSpec>`. |
-| `MessageSnapshot.java` | Record. `headerFields` + `bodyFields` + `msgType` + `beginString` + `capturedAt`. `capture(Message)` static factory. `flatFields()` view for legacy callers. |
-| `FixHeaderFields.java` | Centralised set of engine-owned tags (8, 9, 10, 34, 35, 49, 52, 56). `isEngineOwned(tag)` is the only public method. |
-| `PlaceholderResolver.java` | Port. `resolve(type, ResolutionContext)`. Context exposes `sessionID` and fields resolved so far. |
-| `DefaultPlaceholderResolver.java` | Default impl. `AtomicLong` order ID counter seeded from epoch ms. UTC timestamp format `yyyyMMdd-HH:mm:ss.SSS`. |
-| `ValueMappingService.java` | Port. Named string→string tables. `lookup`, `put`, `remove`, `mappingNames`. |
-| `InMemoryValueMappingService.java` | Default impl. Seeded with `symbol-to-isin` for AAPL, MSFT, GOOG, TSLA, AMZN. |
-| `TemplateRepository.java` | Port. CRUD + `findVisibleTo(SessionID)` (union of Global + matching Session scope). |
-| `InMemoryTemplateRepository.java` | Default impl. `ConcurrentHashMap` keyed by template id. |
-| `MessageDispatcher.java` | Narrow port. Single method `dispatch(Message, SessionID) throws SessionNotFound`. Wired to `LiveSessionFacade::sendToTarget`. |
-| `FixMessageBuilder.java` | Port. `build(template, overrides, sessionID) → Message`. |
-| `DefaultFixMessageBuilder.java` | Default impl. Two-pass resolution (Derived deferred until upstream tags are resolved). Routes header vs body via `Message.isHeaderField`. Skips engine-owned tags. Uses `instanceof` patterns (Java 16+) — **do not switch to type-pattern switch; project targets Java 17 and that feature is preview-only there**. |
-| `TemplateService.java` | UI-facing facade port. `send`, `captureFromMessage`, repository pass-throughs. |
-| `DefaultTemplateService.java` | Default impl. Composes Repository / Builder / Dispatcher / sessionIDs. |
-
-### Integrated changes
-
-- **`OrderService.java`** — added `Optional<MessageSnapshot> findSnapshot(String sessionId, String clOrdId)`. The interface comment explicitly directs new callers to `TemplateService.send(...)` rather than `sendNewOrder(...)`.
-- **`GatewayOrderService.java`** — parallel `Map<String, Map<String, MessageSnapshot>> snapshots` populated in `onOutboundMessage`. `sendNewOrder` and `cancelOrder` left unchanged for backward compatibility with the existing UI form and tests.
-- **`DefaultOrderManagerPlugin.initialize`** — constructs the full template stack, seeds a `built-in.nos.default` New Order Single template that exercises every `FieldValue` variant, and publishes `TemplateService` + `ValueMappingService` on the application.
-- **`FixSimulatorApplication`** — added `getTemplateService()` / `setTemplateService(...)` and `getValueMappingService()` / `setValueMappingService(...)`.
-
-### Backward compatibility
-
-All existing tests under `src/test/java/com/npsoftdev/fixsimulator/gateway/GatewayOrderServiceTest.java` should still pass. The old `sendNewOrder`/`cancelOrder` paths are untouched and continue to write into the same `orders` map; the snapshot capture is additive.
-
----
-
-## 4. What's NOT implemented (work for this Claude Code session)
-
-Roughly ordered by user value. Each item is sized to one focused PR.
-
-### 4.1 — Template-driven dynamic form on `OrdersPage` (high priority)
-
-**Goal:** Replace the hard-coded New Order modal with a template picker plus a
-form that's generated from the selected template's `FieldSpec` list.
-
-**Files:**
-- `src/main/java/com/npsoftdev/fixsimulator/pages/OrdersPage.java`
-- `src/main/java/com/npsoftdev/fixsimulator/pages/OrdersPage.html`
-
-**Design:**
-1. Add a `DropDownChoice<FixMessageTemplate>` populated from
-   `templateSvc().findVisibleTo(activeSessionId)`. Default to `built-in.nos.default`.
-2. When the selected template changes, render a `ListView` of form fields,
-   one per `FieldSpec` whose `FieldValue instanceof FieldValue.UserInput`.
-   Each row shows the field label (use tag-number lookup for now — there's
-   no dictionary integration yet), a text input pre-filled from the
-   `UserInput.defaultValue()`, and a small icon indicating the value source
-   (placeholder / derived / literal — those are read-only previews).
-3. On submit, build `Map<String,String>` of overrides from the form fields
-   and call `templateSvc().send(activeSessionId, selectedTemplate.id(), overrides)`.
-4. Remove the magic-number FIX-code translation helpers (`sideCode`,
-   `ordTypeCode`, `tifCode`) — those become template concerns now.
-5. The old `sendNewOrder` path can be deleted once you're sure no tests
-   depend on it. (The interface method stays for now; only the form should
-   stop calling it.)
-
-**Service accessor (mirror existing pattern):**
-```java
-private static TemplateService templateSvc() {
-    return ((FixSimulatorApplication) Application.get()).getTemplateService();
-}
+```
+com.npsoftdev.fixsimulator
+├── Main.java                    — entry point, starts Jetty
+├── FixSimulatorApplication.java — Wicket WebApplication; wires all services;
+│                                  hosts IRequestCycleListener for remember-me
+├── FixSimulatorSession.java     — Wicket WebSession; holds authenticatedUser,
+│                                  activeSessionId, activityDirection, etc.
+│
+├── gateway/
+│   ├── GatewayConnectionService.java   — QuickFIX/J initiator management
+│   ├── GatewayOrderService.java        — order tracking & snapshot capture
+│   └── GatewayMessageLogService.java   — in-memory + restored message log
+│
+├── service/
+│   ├── ConnectionService.java   — port: connect/disconnect/status/seq
+│   ├── MessageLogService.java   — port: getMessages(sessionId)
+│   ├── OrderService.java        — port: listOrders, sendNewOrder, cancelOrder
+│   └── TradeService.java        — port: listTrades
+│
+├── template/
+│   ├── FieldValue.java          — sealed: Literal | UserInput | Placeholder |
+│   │                              Derived | Enumeration
+│   ├── FieldSpec.java           — record(tag, FieldValue) + factory methods
+│   ├── FixMessageTemplate.java  — immutable template with Builder API
+│   ├── TemplateScope.java       — sealed: Global | Session(sessionId)
+│   ├── PlaceholderType.java     — ORDER_ID | TRANSACT_TIME | SENDING_TIME |
+│   │                              UUID | SESSION_SENDER | SESSION_TARGET
+│   ├── PlaceholderResolver.java — port
+│   ├── DefaultPlaceholderResolver.java
+│   ├── ValueMappingService.java — port: named string→string lookup tables
+│   ├── InMemoryValueMappingService.java (seeded with symbol-to-isin)
+│   ├── TemplateRepository.java  — port: CRUD + findVisibleTo(sessionId)
+│   ├── InMemoryTemplateRepository.java  (ConcurrentHashMap, not persisted)
+│   ├── MessageDispatcher.java   — port: dispatch(Message, SessionID)
+│   ├── FixMessageBuilder.java   — port: build(template, overrides, sessionId)
+│   ├── DefaultFixMessageBuilder.java (two-pass resolution)
+│   ├── TemplateService.java     — UI-facing façade port
+│   ├── DefaultTemplateService.java
+│   ├── MessageSnapshot.java     — record: header/body tags captured at send
+│   ├── FixHeaderFields.java     — ENGINE_OWNED set: {8,9,10,34,35,49,52,56}
+│   ├── DynamicValueRegistry.java
+│   └── YamlValueMappingService.java  (persists to value-mappings.yaml)
+│
+├── user/
+│   ├── User.java                — immutable record+Builder: username,
+│   │                              displayName, passwordHash, email, roles[],
+│   │                              active, maxSessions, timezone
+│   ├── UserRepository.java      — port
+│   ├── YamlUserRepository.java  — persists to data/users.yaml
+│   ├── AuthService.java         — port: authenticate, session tracking
+│   ├── DefaultAuthService.java  — BCrypt; in-memory session counters
+│   ├── RememberMeService.java   — port: createToken, resolveToken, deleteToken
+│   ├── DefaultRememberMeService.java — persists to data/remember-me-tokens.yaml
+│   ├── UserPreferencesService.java   — port: getLastActiveSession, set…
+│   ├── YamlUserPreferencesService.java — persists to data/user-preferences.yaml
+│   ├── RoleRegistry.java
+│   └── Permission.java
+│
+├── persistence/
+│   └── YamlPersistenceService.java  — atomic write: tmp → rename; shared by
+│                                       all YAML-backed repos
+│
+├── plugin/
+│   ├── SimulatorPlugin.java
+│   ├── PluginRegistry.java
+│   ├── NavSection.java          — OVERVIEW | MONITORING | ADMIN
+│   ├── DefaultFixGatewayPlugin.java
+│   └── DefaultOrderManagerPlugin.java — constructs and wires all order/
+│                                         template/user services; seeds templates
+│
+└── pages/
+    ├── BasePage.java            — abstract; topbar, session switcher, nav,
+    │                              seqno modal, userZoneId() helper
+    ├── LoginPage.java           — sets remember-me cookie on login
+    ├── HomePage.java            — dashboard: stats + recent messages
+    ├── ConnectionManagementPage.java
+    ├── OrdersPage.java          — New Order + Amend + Cancel + filter table
+    ├── TradesPage.java          — execution reports table
+    ├── FixActivityPage.java     — full FIX message log with detail modal
+    ├── FixMessageTemplatesPage.java
+    ├── FixMessageTemplateFormPage.java (add/edit template)
+    │   └── TemplateFormPanel.*  — reusable panel for template field editor
+    ├── ComposeMessagePanel.*    — reusable offcanvas panel (raw FIX send)
+    ├── DynamicValuesPage.java
+    ├── ValueMappingsPage.java
+    ├── UserManagementPage.java
+    ├── SystemLogsPage.java
+    └── PagePermissions.java     — page → required Permission mapping
 ```
 
-**Validation:** keep using QuickFIX/J types where possible. For the demo
-template above, `UserInput("quantity")` needs to coerce to integer-ish and
-`UserInput("price")` to decimal-ish at the UI layer — though the wire format
-is string so it's not strictly required.
+---
 
-### 4.2 — Template manager page (medium priority)
+## 4. Data Files (all under `./data/` relative to working directory)
 
-**Goal:** Let the tester author, edit, scope, and delete templates without
-restarting.
+| File | Contents | Written by |
+|---|---|---|
+| `users.yaml` | User accounts | `YamlUserRepository` |
+| `users.yaml.sample` | Starter template (committed) | manual |
+| `remember-me-tokens.yaml` | Browser remember-me tokens (30-day TTL) | `DefaultRememberMeService` |
+| `user-preferences.yaml` | Per-user last-active-session prefs | `YamlUserPreferencesService` |
+| `value-mappings.yaml` | Named key→value mapping tables | `YamlValueMappingService` |
+| `orders-*.yaml` | Persisted order maps per session | `GatewayOrderService` |
+| `trades-*.yaml` | Persisted trade maps per session | `GatewayOrderService` |
+| `messages-*.yaml` | Persisted message log per session | `GatewayMessageLogService` |
 
-**Files (new):**
-- `src/main/java/com/npsoftdev/fixsimulator/pages/TemplatesPage.java`
-- `src/main/java/com/npsoftdev/fixsimulator/pages/TemplatesPage.html`
-- Register in `FixSimulatorApplication.registerBuiltInPlugins()` as a new
-  `DefaultFixGatewayPlugin("templates", "Templates", "bi-files", NavSection.MONITORING, TemplatesPage.class)`.
-
-**Design:**
-- Table of all templates from `templateSvc().findVisibleTo(...)` (or
-  `templateRepo().findAll()` if you want admins to see everything).
-- Per row: edit / clone / delete actions.
-- Edit form for one template: name, description, msgType dropdown
-  (D/F/G/8/…), scope (Global vs Session-picker), and an editable table of
-  `FieldSpec` rows. Each row picks tag (int input) and `FieldValue` kind
-  (radio: Literal | UserInput | Placeholder | Derived) plus the kind-specific
-  inputs.
-- "Add field" / "Remove field" / drag-reorder buttons.
-
-This is the biggest UI piece — break it into small commits.
-
-### 4.3 — "Save as template" from the orders table (medium priority)
-
-**Goal:** Right-click (or button) on any row in the orders table to capture
-that exact message as a starting-point template.
-
-**Steps:**
-1. On the orders table row, add a "Save as template" icon button.
-2. Click handler reads `orderSvc().findSnapshot(sessionId, clOrdId)`.
-3. Open a modal asking for template name + scope.
-4. On confirm, call `templateSvc().captureFromMessage(generatedId, name, snapshot, scope)`
-   and save it via `templateSvc().save(template)`.
-5. Capture builds a template with every retained field as `FieldValue.Literal`.
-   Engine-owned fields are already stripped by `captureFromMessage`.
-6. Direct the user to the template editor (4.2) so they can promote
-   individual fields to UserInput / Placeholder / Derived.
-
-### 4.4 — OrderCancelReplaceRequest (G) seed template (small)
-
-**Goal:** Wire amend support. Currently the amend button in `OrdersPage` is a
-`TODO`.
-
-**Steps:**
-1. Add a second seeded template in `DefaultOrderManagerPlugin.seedBuiltInTemplates`:
-   id `built-in.ocrr.default`, msgType `MsgType.ORDER_CANCEL_REPLACE_REQUEST` ("G").
-2. Fields: OrigClOrdID (UserInput "origClOrdId"), ClOrdID (Placeholder ORDER_ID),
-   Symbol / Side / OrderQty / Price / OrdType (UserInput, defaults from the
-   original order — the UI populates the overrides map from the row).
-3. Hook the amend button in `OrdersPage` to open a modal pre-filled from the
-   selected order's snapshot, then call `templateSvc().send(...)`.
-
-### 4.5 — Value-mapping admin UI (low priority)
-
-**Goal:** Edit the `symbol-to-isin` (and future) lookup tables from the UI
-instead of restarting the JVM.
-
-**Files (new):**
-- `src/main/java/com/npsoftdev/fixsimulator/pages/MappingsPage.java`
-- `src/main/java/com/npsoftdev/fixsimulator/pages/MappingsPage.html`
-
-**Design:** dropdown for mapping name, table of key/value rows with add /
-edit / delete. Backed by `app.getValueMappingService()`.
-
-### 4.6 — Persistence (medium priority, blocking for production use)
-
-**Goal:** Templates and mapping tables survive restart.
-
-**Recommended approach:** JSON-per-template on disk (one file per template
-in a configurable directory), because testers can then version-control
-their templates outside the app.
-
-**Files:**
-- New `FileTemplateRepository implements TemplateRepository` under `template/`.
-  Use Jackson (add to `pom.xml`) or `openjson` (already a transitive dep —
-  see `target/fix-simulator/WEB-INF/lib/openjson-*.jar`).
-- New `FileValueMappingService implements ValueMappingService`.
-- Swap construction in `DefaultOrderManagerPlugin.initialize`. No other
-  code changes — that's the point of the port/adapter split.
-- Templates directory: `~/.fixsimulator/templates/` (read from system
-  property or config file).
-
-**Serialisation shape (proposed JSON):**
-```json
-{
-  "id": "built-in.nos.default",
-  "name": "New Order Single — default",
-  "description": "...",
-  "beginString": "FIX.4.4",
-  "msgType": "D",
-  "scope": {"type": "Global"},
-  "fields": [
-    {"tag": 11, "value": {"kind": "Placeholder", "type": "ORDER_ID"}},
-    {"tag": 55, "value": {"kind": "UserInput", "name": "symbol"}},
-    {"tag": 48, "value": {"kind": "Derived", "sourceTag": 55, "mappingName": "symbol-to-isin"}},
-    {"tag": 22, "value": {"kind": "Literal", "value": "4"}}
-  ]
-}
-```
-
-### 4.7 — Repeating-group support (defer until first use case)
-
-The current `FixMessageBuilder` and `MessageSnapshot` ignore repeating groups
-(NoPartyIDs, NoAllocs, etc.). Add `Map<Integer, List<GroupSnapshot>>` to
-`MessageSnapshot` and a `GroupSpec` variant of `FieldSpec` when the first
-template needs it. Don't speculate — wait for a test case.
-
-### 4.8 — Tests (do alongside each piece above)
-
-Existing tests stay green. New tests to add under
-`src/test/java/com/npsoftdev/fixsimulator/template/`:
-
-- `DefaultFixMessageBuilderTest`:
-  - resolves every `FieldValue` variant correctly
-  - Derived sees the resolved Symbol value regardless of declaration order
-  - engine-owned tags in a template are silently skipped
-  - missing UserInput falls through to defaultValue
-  - missing UserInput with no default produces no field
-- `DefaultPlaceholderResolverTest`: ORDER_ID monotonic; timestamps formatted
-  correctly; SESSION_SENDER/TARGET extracted from SessionID.
-- `InMemoryTemplateRepositoryTest`: `findVisibleTo` correctly merges Global +
-  matching Session and excludes non-matching Session.
-- `DefaultTemplateServiceTest`: end-to-end with a mock `MessageDispatcher`.
+**Gitignore rule:** `*.yaml` is ignored; `*.yaml.sample` is tracked.
+`src/fix-gateway.cfg` (written during tests) is also ignored.
 
 ---
 
-## 5. Design decisions worth preserving
+## 5. FIX Session Configuration
 
-1. **Sealed interface for `FieldValue`.** Adding a new variant should require
-   editing exactly two files: `FieldValue.java` (add the record) and
-   `DefaultFixMessageBuilder.java` (handle it in the resolution loop). Don't
-   move resolution logic into the variants themselves — keeping it in the
-   builder lets the same variant data drive both rendering (UI) and
-   resolution (engine) without inheritance gymnastics.
-
-2. **Two-pass resolution.** Pass 1 resolves everything except Derived, Pass 2
-   resolves Derived against the working map. This decouples template
-   author intent from declaration order — Derived(SecurityID from Symbol)
-   works whether SecurityID appears before or after Symbol in the field list.
-
-3. **Engine-owned tag exclusion is centralised.** `FixHeaderFields.ENGINE_OWNED`
-   is the only place that lists session/transport-level tags. Both
-   `captureFromMessage` (strip on the way in) and `DefaultFixMessageBuilder`
-   (skip on the way out) consult it. If you add an exclusion later, edit
-   once.
-
-4. **`MessageDispatcher` is narrower than `SessionFacade`.** The full façade
-   has logon/logout/seqnum methods. The template engine needs none of that —
-   just the send. The narrow port makes the template stack trivially testable
-   (pass a lambda that captures the outgoing message).
-
-5. **The template carries `msgType` as metadata, not as a `FieldSpec`.** Tag 35
-   is engine-owned (the builder writes it from `template.msgType()`) and
-   `FixHeaderFields.ENGINE_OWNED` enforces that you can't accidentally put
-   it in the field list.
-
-6. **Scope is enforced at lookup time, not at storage time.** `findVisibleTo`
-   filters; `findAll` doesn't. This means an admin UI listing every template
-   (including non-visible ones) is one call away without a separate API.
-
-7. **`OrderService` stays focused on order observation.** Template-based
-   sending lives on `TemplateService` because templates aren't an
-   order-only concept — eventually the tester will template OrderStatusRequest,
-   QuoteRequest, anything. Don't pile more send methods onto `OrderService`.
-
-8. **Backward compatibility is real.** `OrderService.sendNewOrder` and the
-   existing form are intentionally left functional. Migrate the form to
-   `TemplateService.send` (section 4.1), then deprecate `sendNewOrder` in a
-   later pass. Don't break existing tests until the UI migration is
-   green.
+Stored in `fix-gateway.cfg` in the working directory (or on the classpath as a
+fallback).  Managed through the Connection Management page.  Uses QuickFIX/J
+`FileStoreFactory` so sequence numbers survive restarts.
 
 ---
 
-## 6. Conventions to follow
+## 6. Authentication & Session Persistence
 
-- Java 17 target. Records, sealed types, `instanceof` patterns are
-  available. **Type-pattern switches are NOT** (they're preview in 17,
-  stable in 21). Use `if (x instanceof Foo f)` chains instead.
-- Every interface in `template/` extends `Serializable` so Wicket can
-  serialise references in its page store. New ports should follow suit.
-- Keep package layout flat under `com.npsoftdev.fixsimulator.template`. No
-  sub-packages until there's a real reason.
-- Javadoc on every interface and on every non-trivial public method. The
-  existing files set the tone — match it.
-- Comments explain *why*, not *what*. Look at how the two-pass resolution
-  is commented in `DefaultFixMessageBuilder` for the right level.
-- New UI pages follow the existing pattern: `BasePage` subclass, paired
-  `.html`, registered via a plugin in `FixSimulatorApplication`.
+### Login flow
+1. `LoginPage` validates credentials via `AuthService.authenticate` (BCrypt).
+2. Session limit check via `AuthService.canStartSession`.
+3. `session.bind()` → `session.signIn(user)` → `AuthService.registerSession`.
+4. `FixSimulatorApplication.restoreActiveSession` restores the last-selected
+   FIX session (validates against live connection list; ignores stale IDs).
+5. A remember-me token is generated (`DefaultRememberMeService.createToken`),
+   persisted to `data/remember-me-tokens.yaml`, and written as an `HttpOnly`
+   browser cookie (`FIXSIM_REMEMBER_ME`, 30-day `Max-Age`, path `/`).
+
+### Remember-me auto-login (on every anonymous request)
+An `IRequestCycleListener.onBeginRequest` in `FixSimulatorApplication` checks
+for the `FIXSIM_REMEMBER_ME` cookie, resolves the token, looks up the user, and
+auto-signs in — exactly like a manual login, including calling
+`restoreActiveSession`.
+
+### Sign-out
+`BasePage` sign-out link: unregisters session, deletes the server-side token,
+clears the cookie (Max-Age=0), invalidates the Wicket session.
+
+### FIX session selection
+`BasePage` topbar session switcher persists the chosen session ID via
+`UserPreferencesService.setLastActiveSession` immediately on switch.
 
 ---
 
-## 7. Quick verification path
-
-To prove the template engine works end-to-end against a live FIX session:
+## 7. User Record Fields
 
 ```java
-// In any debug servlet, REPL, or temporary main:
-FixSimulatorApplication app = (FixSimulatorApplication) Application.get();
-TemplateService svc = app.getTemplateService();
-String sessionId = "FIX.4.4:SIMULATOR->EXCHANGE";  // whatever you have configured
-Map<String,String> overrides = Map.of(
-    "symbol",   "AAPL",
-    "side",     "1",      // Buy
-    "quantity", "100",
-    "price",    "150.50"
-);
-Message sent = svc.send(sessionId, "built-in.nos.default", overrides);
-System.out.println(sent.toString());
-// Expect: 35=D, 11=<long>, 60=<utc>, 55=AAPL, 48=US0378331005, 22=4,
-//         54=1, 38=100, 44=150.50, 40=2, 59=0, 21=1
+String       username        // login name, immutable after creation
+String       displayName     // shown in topbar
+String       passwordHash    // BCrypt, null = no password
+String       email
+List<String> roles           // "Admin" | "Tester"
+boolean      active          // false = cannot log in
+int          maxSessions     // 0 = unlimited concurrent sessions
+String       timezone        // IANA timezone ID, null = UTC
+                             // e.g. "Asia/Bangkok", "America/New_York"
 ```
 
-The `built-in.nos.default` template is seeded automatically on application
-startup by `DefaultOrderManagerPlugin.seedBuiltInTemplates`.
+**Roles:**
+- `Admin` — User Management, System Logs; implies Tester permissions.
+- `Tester` — FIX connections, orders, trades, templates, activity, compose.
+
+---
+
+## 8. Timezone Handling
+
+`BasePage.userZoneId()` resolves the authenticated user's `timezone` field to a
+`java.time.ZoneId`, falling back to UTC for null/blank/invalid values.
+
+All timestamps in the UI use this zone:
+- **Dashboard:** "last updated" clock, recent-message timestamps.
+- **FIX Activity:** row timestamps (`HH:mm:ss.SSS`).
+- **Orders → Send Time:** FIX tag 60 `TransactTime` parsed as UTC
+  (`yyyyMMdd-HH:mm:ss[.SSS]`) then reformatted in user's zone.
+- **Trades → TransactTime:** same parsing + reformatting.
+
+Timezone is set per user in the User Management edit modal (dropdown of ~25
+curated IANA zones, displayed as `(UTC+07:00) Asia/Bangkok`).
+
+---
+
+## 9. FIX Message Templates
+
+### FieldValue variants (sealed interface)
+
+| Variant | Purpose |
+|---|---|
+| `Literal(value)` | Fixed wire value |
+| `UserInput(name, displayName, defaultValue)` | Free-text field shown in the form |
+| `Placeholder(type)` | Auto-generated at send time (ORDER_ID, TRANSACT_TIME, …) |
+| `Derived(sourceTag, mappingName)` | Looks up `sourceTag`'s resolved value in a named mapping table |
+| `Enumeration(options)` | Dropdown; `options` is `List<String>` of `KEY:LABEL` pairs (e.g. `"1:Buy"`) or plain values (backward compat) |
+
+### Enumeration KEY:LABEL format
+Options are stored as comma-separated strings in the template YAML.
+`KEY` is the FIX wire value; `LABEL` is shown in the UI.
+Plain values (no colon) are treated as key = label.
+
+### Template scope
+`Global` — visible to all sessions.
+`Session(sessionId)` — visible only to that session.
+`findVisibleTo(sessionId)` returns the union of Global + matching Session.
+
+### Integration with Orders page
+When a template is applied to the New Order or Amend form:
+- The Side (tag 54), Order Type (tag 40), and TIF (tag 59) dropdowns are
+  populated from the template's `Enumeration` fields for those tags.
+- Extra `UserInput` / `Enumeration` fields beyond the standard set are rendered
+  below the core fields as "Additional Fields".
+- Standard tags handled by the form: `{55, 54, 44, 38, 40, 59, 41}`.
+
+### Message builder two-pass resolution
+Pass 1: resolve everything except `Derived`.
+Pass 2: resolve `Derived` using the results of Pass 1.
+This makes declaration order irrelevant for Derived fields.
+
+### Engine-owned tags
+`FixHeaderFields.ENGINE_OWNED = {8, 9, 10, 34, 35, 49, 52, 56}`
+These are set by the QuickFIX/J engine and are silently skipped by the builder
+and stripped by `captureFromMessage`.
+
+### Persistence
+Templates are currently stored in-memory (`InMemoryTemplateRepository`).
+Value mappings are persisted to `data/value-mappings.yaml`
+(`YamlValueMappingService`).
+
+> **Note for future work:** Implement `YamlTemplateRepository` (or
+> JSON-per-file) following the `YamlPersistenceService` atomic-write pattern.
+
+### Seeded built-in templates
+`DefaultOrderManagerPlugin` seeds:
+- `built-in.nos.default` — New Order Single (D): ClOrdID (ORDER_ID), Symbol
+  (UserInput), Side/OrdType/TIF (Enumeration defaults), Qty/Price (UserInput),
+  SecurityID/IDSource (Derived from Symbol via `symbol-to-isin`).
+- `built-in.ocrr.default` — OrderCancelReplaceRequest (G): same fields plus
+  OrigClOrdID (UserInput).
+
+---
+
+## 10. Compose Message Panel (`ComposeMessagePanel`)
+
+Reusable Wicket `Panel` (offcanvas drawer) present on FIX Activity, Orders, and
+Trades pages.
+
+**Features:**
+- Session info strip (auto-refreshes every 5 s via Ajax timer).
+- Raw FIX text area + delimiter field.
+- **Parse button** — client-side only; shows field-by-field breakdown with tag
+  names and decoded values from `window.FIX` namespace (set by
+  `ComposeMessagePanel.js`).
+- **Send button** — calls `ConnectionService.sendRaw(sessionId, raw, delim)`.
+  Engine sets session-level tags (8/49/56/34/52/10); user input for those tags
+  is ignored.
+
+**JS architecture:**
+- `ComposeMessagePanel.js` — loaded by the panel's `renderHead()`; exports
+  `window.FIX = { TAG_NAMES, VALUE_DECODERS, parseFix, escHtml }`.
+- `FixActivityPage.js` — consumes `window.FIX` for the message detail modal.
+
+---
+
+## 11. FIX Activity Page
+
+- Shows all inbound/outbound FIX messages plus application events (SYSTEM
+  direction) for the active session.
+- **Ordering:** newest-first (service returns messages in reverse-insert order).
+- **Filters:** Direction (All/Sent/Received), Hide Heartbeats checkbox;
+  persisted in `FixSimulatorSession` so they survive page navigations.
+- **Detail modal:** click a row to see all parsed tags with names and decoded
+  values; also shows raw FIX string.
+- **"Create Template from FIX Message":** captures the raw message into a new
+  template via `TemplateService.captureFromMessage`, then navigates to the
+  template edit form.
+- Auto-refreshes every 3 s.
+
+---
+
+## 12. Orders Page
+
+### New Order dialog (`newOrderModal`)
+Standard fields: Symbol, Side, Qty, Price, OrdType, TIF (all loaded from
+template where available).  ClOrdID is auto-generated.  Extra template fields
+rendered below as "Additional Fields".
+
+### Amend Order dialog (`amendOrderModal`)
+Pre-filled from the order row's FIX fields.  New ClOrdID is auto-generated.
+OrigClOrdID shown as read-only strip.
+
+### Cancel
+Direct button on each row; sends OrderCancelRequest (F) immediately.
+
+### Table + filters
+Filters: ClOrdID (text), Symbol (text), Side (dropdown), OrdType (dropdown),
+TIF (dropdown), Status (dropdown).  All filters trigger AJAX re-render.
+
+### Tooltip on action buttons
+Shows the name of the applied template (populated by `DefaultOrderManagerPlugin`
+via `findTemplate(msgType)`).
+
+---
+
+## 13. Trades Page
+
+Shows only execution reports with ExecType PartialFill (1), Fill (2), or
+Trade (F).  Filters: ExecID, ClOrdID, ExecType, Symbol, Side.  Pagination 20
+per page.  Auto-refresh every 3 s.
+
+---
+
+## 14. Key Design Decisions
+
+1. **Sealed `FieldValue`** — new variants require editing only `FieldValue.java`
+   and `DefaultFixMessageBuilder.java`.  Do not move resolution logic into
+   variants.
+
+2. **Two-pass builder** — Pass 1: all non-Derived; Pass 2: Derived against
+   resolved map.  Declaration order is irrelevant.
+
+3. **Engine-owned tag exclusion is centralised** in `FixHeaderFields`.  Both
+   `captureFromMessage` and the builder consult it.
+
+4. **`MessageDispatcher` is narrower than `SessionFacade`** — only `dispatch`.
+   This keeps the template stack testable with a lambda mock.
+
+5. **FIX model fields hold wire codes** — `NewOrderModel.side` stores `"1"` /
+   `"2"`, not `"BUY"` / `"SELL"`.  Display labels come via `IChoiceRenderer`
+   backed by `List<FieldChoice>`.  The old `sideCode()` / `ordTypeCode()` /
+   `tifCode()` helpers were deleted.
+
+6. **`ComposeMessagePanel` is self-contained** — installs its own Ajax timer
+   for the session info strip.  Host pages just `add(new ComposeMessagePanel(...))`
+   and optionally pass components to refresh on send.
+
+7. **Remember-me uses an `IRequestCycleListener`** not a filter or
+   `AuthorizationStrategy`, so the auto-login always runs early enough for
+   subsequent authorization checks to see the authenticated session.
+
+8. **`restoreActiveSession` validates** the saved FIX session ID against the
+   live connection list before restoring it.  Stale IDs are silently ignored.
+
+9. **Atomic YAML writes** via `YamlPersistenceService`: write to `.tmp` sibling,
+   then rename (POSIX atomic; best-effort on Windows).  All YAML repos share
+   one `YamlPersistenceService` instance per data directory.
+
+10. **CSP blocks inline JS.** All JS uses `addEventListener('DOMContentLoaded',
+    function() { ... })` inside an IIFE.  Never add `onclick=` attributes or
+    `<script>` blocks that aren't loaded via Wicket's `renderHead`.
+
+---
+
+## 15. Conventions
+
+- **Java 17.** Records, sealed types, `instanceof` patterns OK.
+  Type-pattern switches are **NOT** available (preview in 17, stable in 21).
+  Use `if (x instanceof Foo f)` chains.
+- Every port/interface in `template/` and `user/` should implement
+  `Serializable` (Wicket serialises page state).
+- `BasePage` subclass + paired `.html` file + plugin registration in
+  `FixSimulatorApplication.registerBuiltInPlugins()` for new pages.
+- YAML files go under `./data/` (relative to working directory =
+  `System.getProperty("user.dir")`).
+- Comments explain *why*, not *what*.
+- Do not add docstrings, comments, or type annotations to code you didn't
+  change.
+
+---
+
+## 16. Navigation Structure (sidebar)
+
+```
+OVERVIEW
+  Dashboard
+
+MONITORING
+  Orders
+  Trades
+  FIX Activity
+
+ADMIN
+  FIX Connections
+  FIX Message Templates
+  Dynamic Values
+  Value Mappings
+  User Management
+  System Logs
+```
+
+Permission gating:
+- `View FIX Message Templates` — Tester role
+- `View Manage FIX Connections` — Admin role
+- `View User Management` — Admin role
+- `View System Logs` — Admin role
+
+---
+
+## 17. Plugin Architecture
+
+`PluginRegistry` holds `List<SimulatorPlugin>`.  Each plugin has an `id`,
+`label`, `iconClass`, `NavSection`, optional `pageClass`, and `initialize(app)`
+method.
+
+`DefaultFixGatewayPlugin` — registers pages and wires the QuickFIX/J engine.
+`DefaultOrderManagerPlugin` — wires `OrderService`, `TradeService`,
+`TemplateService`, `ValueMappingService`, `UserRepository`, `AuthService`,
+`LogFileService`; seeds built-in templates; restores persisted orders/trades/messages.
