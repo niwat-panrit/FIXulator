@@ -69,6 +69,9 @@ public class LoginPage extends WebPage {
                 session.signIn(user);
                 authService.registerSession(user.username(), session.getId());
 
+                // Restore the FIX session the user had last selected
+                app.restoreActiveSession(session, user.username());
+
                 // Persist a remember-me token so the user stays signed in after restart
                 RememberMeService rms = app.getRememberMeService();
                 if (rms != null) {

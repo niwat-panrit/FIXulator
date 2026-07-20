@@ -11,6 +11,7 @@ import com.npsoftdev.fixsimulator.user.AuthService;
 import com.npsoftdev.fixsimulator.user.Permission;
 import com.npsoftdev.fixsimulator.user.RememberMeService;
 import com.npsoftdev.fixsimulator.user.User;
+import com.npsoftdev.fixsimulator.user.UserPreferencesService;
 import jakarta.servlet.http.Cookie;
 import org.apache.wicket.request.http.WebRequest;
 import org.apache.wicket.request.http.WebResponse;
@@ -235,6 +236,12 @@ public abstract class BasePage extends WebPage {
                         User u = FixSimulatorSession.get().getAuthenticatedUser();
                         log.info("Active FIX session switched: user='{}' from='{}' to='{}'",
                                 u != null ? u.username() : "unknown", previousSessionId, sd.sessionId());
+
+                        // Persist the selection so it survives app restarts
+                        if (u != null) {
+                            UserPreferencesService prefs = app().getUserPreferencesService();
+                            if (prefs != null) prefs.setLastActiveSession(u.username(), sd.sessionId());
+                        }
                         target.add(topbarNav);
                         onSessionSwitched(target);
                         target.appendJavaScript(

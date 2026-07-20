@@ -31,7 +31,9 @@ import com.npsoftdev.fixsimulator.user.AuthService;
 import com.npsoftdev.fixsimulator.user.DefaultRememberMeService;
 import com.npsoftdev.fixsimulator.user.Permission;
 import com.npsoftdev.fixsimulator.user.RememberMeService;
+import com.npsoftdev.fixsimulator.user.UserPreferencesService;
 import com.npsoftdev.fixsimulator.user.UserRepository;
+import com.npsoftdev.fixsimulator.user.YamlUserPreferencesService;
 import org.apache.wicket.ISessionListener;
 import org.apache.wicket.request.cycle.IRequestCycleListener;
 import org.apache.wicket.request.cycle.RequestCycle;
@@ -59,6 +61,8 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class FixSimulatorApplication extends WebApplication {
 
@@ -77,8 +81,9 @@ public class FixSimulatorApplication extends WebApplication {
     private DynamicValueRegistry dynamicValueRegistry;
     private UserRepository       userRepository;
     private AuthService          authService;
-    private RememberMeService    rememberMeService;
-    private LogFileService       logFileService;
+    private RememberMeService       rememberMeService;
+    private UserPreferencesService  userPreferencesService;
+    private LogFileService          logFileService;
 
     // ── WebApplication ────────────────────────────────────────────────────────
 
@@ -111,11 +116,13 @@ public class FixSimulatorApplication extends WebApplication {
         pluginRegistry.getPlugins().forEach(p -> p.initialize(this));
 
         // Initialise persistent remember-me token store and purge stale entries
-        rememberMeService = new DefaultRememberMeService(
-                new YamlPersistenceService(resolveDataDirectory()));
+        YamlPersistenceService yamlSvc = new YamlPersistenceService(resolveDataDirectory());
+        rememberMeService      = new DefaultRememberMeService(yamlSvc);
+        userPreferencesService = new YamlUserPreferencesService(yamlSvc);
         rememberMeService.purgeExpired();
 
-        // Auto-login via remember-me cookie on every request when session is anonymous
+        // Auto-login via remember-me cookie on every request when session is anonymous,
+        // then restore the user's last-selected FIX session if it still exists.
         getRequestCycleListeners().add(new IRequestCycleListener() {
             @Override
             public void onBeginRequest(RequestCycle cycle) {
@@ -135,6 +142,7 @@ public class FixSimulatorApplication extends WebApplication {
                             session.bind();
                             session.signIn(user);
                             auth.registerSession(username, session.getId());
+                            restoreActiveSession(session, username);
                         }
                     });
                 });
@@ -220,9 +228,33 @@ public class FixSimulatorApplication extends WebApplication {
     public ValueMappingService  getValueMappingService()  { return valueMappingService; }
     public DynamicValueRegistry getDynamicValueRegistry() { return dynamicValueRegistry; }
     public UserRepository       getUserRepository()       { return userRepository; }
-    public AuthService          getAuthService()          { return authService; }
-    public RememberMeService    getRememberMeService()    { return rememberMeService; }
-    public LogFileService       getLogFileService()       { return logFileService; }
+    public AuthService             getAuthService()             { return authService; }
+    public RememberMeService       getRememberMeService()       { return rememberMeService; }
+    public UserPreferencesService  getUserPreferencesService()  { return userPreferencesService; }
+    public LogFileService          getLogFileService()          { return logFileService; }
+
+    /**
+     * Restores the user's last-selected FIX session into {@code session}.
+     * If the remembered session ID no longer exists in the connection list it is
+     * silently ignored, leaving the active session unset.
+     * <p>Call this immediately after {@link FixSimulatorSession#signIn} on both
+     * manual login and remember-me auto-login.</p>
+     */
+    public void restoreActiveSession(FixSimulatorSession session, String username) {
+        UserPreferencesService prefs = getUserPreferencesService();
+        ConnectionService      cs    = getConnectionService();
+        if (prefs == null || cs == null) return;
+
+        prefs.getLastActiveSession(username).ifPresent(savedId -> {
+            Set<String> knownIds = cs.listSessions().stream()
+                    .map(sd -> sd.sessionId())
+                    .collect(Collectors.toSet());
+            if (knownIds.contains(savedId)) {
+                session.setActiveSessionId(savedId);
+            }
+            // else: session no longer exists — leave activeSessionId null (unselected)
+        });
+    }
 
     /** Called by {@link DefaultFixGatewayPlugin#initialize}. */
     public void setConnectionService(ConnectionService cs)  { this.connectionService = cs; }
