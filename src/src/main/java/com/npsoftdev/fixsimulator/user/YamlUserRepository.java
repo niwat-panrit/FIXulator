@@ -119,6 +119,7 @@ public class YamlUserRepository implements UserRepository {
                 .roles(roles)
                 .active(d.active == null || d.active)
                 .maxSessions(d.maxSessions != null ? d.maxSessions : 0)
+                .timezone(d.timezone)
                 .build();
     }
 
@@ -131,6 +132,7 @@ public class YamlUserRepository implements UserRepository {
         d.roles          = u.roles().isEmpty() ? null : new ArrayList<>(u.roles());
         d.active         = u.isActive() ? null : false;  // omit true (cleaner YAML)
         d.maxSessions    = u.maxSessions() == 0 ? null : u.maxSessions();
+        d.timezone       = u.timezone();
         return d;
     }
 
@@ -152,5 +154,7 @@ public class YamlUserRepository implements UserRepository {
         public Boolean      active;
         /** Null means 0 = unlimited. */
         public Integer      maxSessions;
+        /** IANA timezone ID, e.g. "Asia/Bangkok". Null means UTC. */
+        public String       timezone;
     }
 }

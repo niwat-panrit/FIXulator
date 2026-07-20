@@ -24,6 +24,8 @@ public final class User implements Serializable {
     private final boolean      active;
     /** Maximum concurrent sessions. 0 = unlimited. */
     private final int          maxSessions;
+    /** IANA timezone ID (e.g. "Asia/Bangkok"). {@code null} defaults to UTC. */
+    private final String       timezone;
 
     private User(Builder b) {
         this.username     = Objects.requireNonNull(b.username, "username");
@@ -35,6 +37,7 @@ public final class User implements Serializable {
                 : Collections.emptyList();
         this.active       = b.active;
         this.maxSessions  = Math.max(0, b.maxSessions);
+        this.timezone     = b.timezone;
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
@@ -47,6 +50,8 @@ public final class User implements Serializable {
     public boolean      isActive()     { return active; }
     /** Maximum concurrent sessions; {@code 0} means unlimited. */
     public int          maxSessions()  { return maxSessions; }
+    /** IANA timezone ID, or {@code null} meaning UTC. */
+    public String       timezone()     { return timezone; }
 
     public boolean hasRole(String role) {
         return roles.contains(role);
@@ -60,7 +65,8 @@ public final class User implements Serializable {
         return new Builder()
                 .username(username).displayName(displayName)
                 .passwordHash(passwordHash).email(email)
-                .roles(roles).active(active).maxSessions(maxSessions);
+                .roles(roles).active(active).maxSessions(maxSessions)
+                .timezone(timezone);
     }
 
     public static final class Builder {
@@ -71,6 +77,7 @@ public final class User implements Serializable {
         private List<String> roles       = Collections.emptyList();
         private boolean      active      = true;
         private int          maxSessions = 0;
+        private String       timezone;
 
         public Builder username(String v)       { this.username     = v; return this; }
         public Builder displayName(String v)    { this.displayName  = v; return this; }
@@ -79,6 +86,7 @@ public final class User implements Serializable {
         public Builder roles(List<String> v)    { this.roles        = v; return this; }
         public Builder active(boolean v)        { this.active       = v; return this; }
         public Builder maxSessions(int v)       { this.maxSessions  = v; return this; }
+        public Builder timezone(String v)       { this.timezone     = v; return this; }
 
         public User build() { return new User(this); }
     }

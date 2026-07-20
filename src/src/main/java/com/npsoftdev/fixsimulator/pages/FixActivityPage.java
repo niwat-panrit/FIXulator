@@ -34,8 +34,7 @@ import java.util.*;
 
 public class FixActivityPage extends BasePage {
 
-    private static final DateTimeFormatter TIME_FMT =
-            DateTimeFormatter.ofPattern("HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
+    private static final String TIME_PATTERN = "HH:mm:ss.SSS";
 
     private static final int PAGE_SIZE = 50;
 
@@ -91,9 +90,12 @@ public class FixActivityPage extends BasePage {
                         String connName = connName(sessionId);
                         List<LogEntry> messages = mls.getMessages(sessionId); // newest-first
 
+                        DateTimeFormatter timeFmt = DateTimeFormatter
+                                .ofPattern(TIME_PATTERN).withZone(userZoneId());
+
                         List<ActivityRow> rows = new ArrayList<>(messages.size() * 2);
                         for (LogEntry entry : messages) {
-                            String timeStr = TIME_FMT.format(entry.timestamp());
+                            String timeStr = timeFmt.format(entry.timestamp());
 
                             // System annotations (cache restore, etc.) — APP row only
                             if (entry.direction() == MessageLogService.Direction.SYSTEM) {

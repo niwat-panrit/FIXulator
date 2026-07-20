@@ -29,10 +29,8 @@ import java.util.Map;
 
 public class HomePage extends BasePage {
 
-    private static final DateTimeFormatter TIME_FMT =
-            DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
-    private static final DateTimeFormatter MSG_TIME_FMT =
-            DateTimeFormatter.ofPattern("HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
+    private static final String TIME_PATTERN     = "HH:mm:ss";
+    private static final String MSG_TIME_PATTERN = "HH:mm:ss.SSS";
 
     public HomePage() {
         super();
@@ -45,7 +43,8 @@ public class HomePage extends BasePage {
 
         // ── Last updated timestamp ─────────────────────────────────────────────
         dashboard.add(new Label("lastUpdated",
-                (IModel<String>) () -> TIME_FMT.format(Instant.now())));
+                (IModel<String>) () -> DateTimeFormatter.ofPattern(TIME_PATTERN)
+                        .withZone(userZoneId()).format(Instant.now())));
 
         // ── Stat cards ─────────────────────────────────────────────────────────
 
@@ -159,7 +158,8 @@ public class HomePage extends BasePage {
                 Map<String, String> tags = FixActivityPage.parseTags(entry.rawMessage());
                 boolean sent = entry.direction() == MessageLogService.Direction.SENT;
 
-                item.add(new Label("msgTime", MSG_TIME_FMT.format(entry.timestamp())));
+                item.add(new Label("msgTime", DateTimeFormatter.ofPattern(MSG_TIME_PATTERN)
+                        .withZone(userZoneId()).format(entry.timestamp())));
 
                 Label dirLabel = new Label("msgDir", sent ? "\u25B6 OUT" : "\u25C4 IN");
                 dirLabel.add(AttributeModifier.replace("class", sent ? "dir-out" : "dir-in"));

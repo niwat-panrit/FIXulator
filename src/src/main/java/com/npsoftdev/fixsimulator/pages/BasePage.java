@@ -15,6 +15,7 @@ import com.npsoftdev.fixsimulator.user.UserPreferencesService;
 import jakarta.servlet.http.Cookie;
 import org.apache.wicket.request.http.WebRequest;
 import org.apache.wicket.request.http.WebResponse;
+import java.time.ZoneId;
 import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
@@ -392,6 +393,19 @@ public abstract class BasePage extends WebPage {
 
     protected FixSimulatorApplication app() {
         return (FixSimulatorApplication) Application.get();
+    }
+
+    /**
+     * Returns the IANA {@link ZoneId} for the currently authenticated user.
+     * Falls back to UTC when no user is signed in or the stored timezone is
+     * absent / unrecognised.
+     */
+    protected ZoneId userZoneId() {
+        User u = FixSimulatorSession.get().getAuthenticatedUser();
+        if (u != null && u.timezone() != null && !u.timezone().isBlank()) {
+            try { return ZoneId.of(u.timezone()); } catch (Exception ignored) {}
+        }
+        return ZoneId.of("UTC");
     }
 
     private ConnectionService connSvc() {

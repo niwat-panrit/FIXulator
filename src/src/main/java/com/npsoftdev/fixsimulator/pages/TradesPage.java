@@ -23,6 +23,10 @@ import org.apache.wicket.model.LoadableDetachableModel;
 
 import java.io.Serializable;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +95,7 @@ public class TradesPage extends BasePage {
                                 "badge " + statusBadgeClass(ordStatus)));
                         item.add(statusLabel);
 
-                        item.add(new Label("transactTime", formatTime(t.getOrDefault(60, ""))));
+                        item.add(new Label("transactTime", formatFixTime(t.getOrDefault(60, ""), userZoneId())));
 
                         item.add(AttributeModifier.replace("class", rowClass(execType)));
                     }
@@ -311,10 +315,20 @@ public class TradesPage extends BasePage {
         };
     }
 
-    private static String formatTime(String raw) {
+    private static String formatFixTime(String raw, ZoneId tz) {
         if (blank(raw)) return "—";
-        int dash = raw.indexOf('-');
-        return dash >= 0 ? raw.substring(dash + 1) : raw;
+        try {
+            // FIX TransactTime: yyyyMMdd-HH:mm:ss or yyyyMMdd-HH:mm:ss.SSS (UTC)
+            DateTimeFormatter fixFmt = raw.length() > 17
+                    ? DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss.SSS").withZone(ZoneOffset.UTC)
+                    : DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss").withZone(ZoneOffset.UTC);
+            Instant instant = fixFmt.parse(raw, Instant::from);
+            return DateTimeFormatter.ofPattern("HH:mm:ss").withZone(tz).format(instant);
+        } catch (Exception e) {
+            // Fallback: strip date prefix
+            int dash = raw.indexOf('-');
+            return dash >= 0 ? raw.substring(dash + 1) : raw;
+        }
     }
 
     private static String nvl(String value) {

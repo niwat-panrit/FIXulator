@@ -37,6 +37,10 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -157,7 +161,7 @@ public class OrdersPage extends BasePage {
                 item.add(new Label("cumQty",    o.getOrDefault(14, "0")));
                 item.add(new Label("leavesQty", o.getOrDefault(151, "—")));
                 item.add(new Label("avgPx",     nvl(o.get(6))));
-                item.add(new Label("sendTime",  formatSendTime(o.getOrDefault(60, ""))));
+                item.add(new Label("sendTime",  formatFixTime(o.getOrDefault(60, ""), userZoneId())));
 
                 // Row-level CSS to convey order state at a glance
                 item.add(AttributeModifier.replace("class", rowClass(ordStatus)));
@@ -712,10 +716,20 @@ public class OrdersPage extends BasePage {
         };
     }
 
-    private static String formatSendTime(String raw) {
+    private static String formatFixTime(String raw, ZoneId tz) {
         if (blank(raw)) return "—";
-        int dash = raw.indexOf('-');
-        return dash >= 0 ? raw.substring(dash + 1) : raw;
+        try {
+            // FIX TransactTime: yyyyMMdd-HH:mm:ss or yyyyMMdd-HH:mm:ss.SSS (UTC)
+            DateTimeFormatter fixFmt = raw.length() > 17
+                    ? DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss.SSS").withZone(ZoneOffset.UTC)
+                    : DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss").withZone(ZoneOffset.UTC);
+            Instant instant = fixFmt.parse(raw, Instant::from);
+            return DateTimeFormatter.ofPattern("HH:mm:ss").withZone(tz).format(instant);
+        } catch (Exception e) {
+            // Fallback: strip date prefix
+            int dash = raw.indexOf('-');
+            return dash >= 0 ? raw.substring(dash + 1) : raw;
+        }
     }
 
     private static String nvl(String value) {

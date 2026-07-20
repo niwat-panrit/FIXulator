@@ -13,7 +13,9 @@ import org.apache.wicket.ajax.markup.html.form.AjaxButton;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.CheckBox;
+import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
+import org.apache.wicket.markup.html.form.IChoiceRenderer;
 import org.apache.wicket.markup.html.form.NumberTextField;
 import org.apache.wicket.markup.html.form.PasswordTextField;
 import org.apache.wicket.markup.html.form.TextField;
@@ -26,12 +28,30 @@ import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.PropertyModel;
 
 import java.io.Serializable;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class UserManagementPage extends BasePage {
 
     private static final Logger log = LoggerFactory.getLogger(UserManagementPage.class);
+
+    /** Curated list of IANA timezone IDs shown in the timezone picker. */
+    private static final List<String> TIMEZONE_CHOICES = List.of(
+            "UTC",
+            "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+            "America/Sao_Paulo",
+            "Europe/London", "Europe/Amsterdam", "Europe/Berlin", "Europe/Paris",
+            "Europe/Zurich", "Europe/Stockholm", "Europe/Moscow",
+            "Africa/Johannesburg",
+            "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Jakarta",
+            "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Singapore",
+            "Asia/Tokyo", "Asia/Seoul",
+            "Australia/Sydney", "Pacific/Auckland"
+    );
 
     private final UserFormModel formModel = new UserFormModel();
 
@@ -178,6 +198,18 @@ public class UserManagementPage extends BasePage {
         userForm.add(new NumberTextField<>("maxSessions",
                 new PropertyModel<>(formModel, "maxSessions"), Integer.class).setMinimum(0));
 
+        // Timezone
+        DropDownChoice<String> tzDd = new DropDownChoice<>("timezone",
+                new PropertyModel<>(formModel, "timezone"),
+                TIMEZONE_CHOICES,
+                new IChoiceRenderer<>() {
+                    @Override public Object getDisplayValue(String id) { return tzLabel(id); }
+                    @Override public String getIdValue(String id, int i) { return id; }
+                    @Override public String getObject(String id, IModel<? extends List<? extends String>> c) { return id; }
+                });
+        tzDd.setNullValid(true);
+        userForm.add(tzDd);
+
         // Save button
         userForm.add(new AjaxButton("saveBtn", userForm) {
             @Override
@@ -208,6 +240,7 @@ public class UserManagementPage extends BasePage {
                             .roles(roles)
                             .active(formModel.active)
                             .maxSessions(formModel.maxSessions)
+                            .timezone(formModel.timezone)
                             .build();
                     repo.save(user);
                     log.info("User '{}' created by '{}'", formModel.username.trim(),
@@ -227,6 +260,7 @@ public class UserManagementPage extends BasePage {
                             .roles(roles)
                             .active(formModel.active)
                             .maxSessions(formModel.maxSessions)
+                            .timezone(formModel.timezone)
                             .build();
                     repo.save(updated);
                     log.info("User '{}' updated by '{}'", formModel.editingUsername,
@@ -244,6 +278,20 @@ public class UserManagementPage extends BasePage {
                 target.add(userForm);
             }
         });
+    }
+
+    // ── Timezone label ─────────────────────────────────────────────────────────
+
+    private static String tzLabel(String id) {
+        if (id == null) return "(server default — UTC)";
+        try {
+            ZoneOffset offset = ZonedDateTime.now(ZoneId.of(id)).getOffset();
+            String sign   = offset.getTotalSeconds() >= 0 ? "+" : "";
+            String hhmm   = offset.getId().equals("Z") ? "+00:00" : offset.getId();
+            return "(UTC" + sign + hhmm + ") " + id;
+        } catch (Exception e) {
+            return id;
+        }
     }
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -317,6 +365,7 @@ public class UserManagementPage extends BasePage {
         boolean roleTester      = false;
         boolean active          = true;
         int     maxSessions     = 0;
+        String  timezone        = null;
 
         void loadFrom(User u) {
             editingUsername = u.username();
@@ -329,6 +378,7 @@ public class UserManagementPage extends BasePage {
             roleTester      = u.hasRole(RoleRegistry.TESTER);
             active          = u.isActive();
             maxSessions     = u.maxSessions();
+            timezone        = u.timezone();
         }
 
         void reset() {
@@ -342,6 +392,7 @@ public class UserManagementPage extends BasePage {
             roleTester      = false;
             active          = true;
             maxSessions     = 0;
+            timezone        = null;
         }
 
         List<String> collectRoles() {
