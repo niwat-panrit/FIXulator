@@ -215,6 +215,14 @@ class DefaultAuthServiceTest {
         assertNotEquals(h1, h2, "BCrypt salts must differ");
     }
 
+    @Test
+    void hashPassword_usesCostFactor12() {
+        String hash = DefaultAuthService.hashPassword("any");
+        // BCrypt format: $2a$<cost>$... — cost must be exactly 12
+        assertTrue(hash.startsWith("$2a$12$"),
+                "BCrypt cost factor must be 12, got: " + hash);
+    }
+
     // ── Minimal in-memory UserRepository for this test ─────────────────────
 
     static class InMemoryUserRepository implements UserRepository {

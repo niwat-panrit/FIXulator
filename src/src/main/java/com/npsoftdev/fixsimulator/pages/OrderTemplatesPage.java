@@ -351,7 +351,7 @@ public class OrderTemplatesPage extends BasePage {
                     @Override
                     protected void updateAjaxAttributes(AjaxRequestAttributes attrs) {
                         super.updateAjaxAttributes(attrs);
-                        String safe = t.name().replace("'", "\\'");
+                        String safe = JsEscape.forSingleQuotedLiteral(t.name());
                         attrs.getAjaxCallListeners().add(new AjaxCallListener()
                                 .onPrecondition("return confirm('Delete template \\'" + safe + "\\'?');"));
                     }

@@ -35,9 +35,11 @@ import com.npsoftdev.fixsimulator.user.UserPreferencesService;
 import com.npsoftdev.fixsimulator.user.UserRepository;
 import com.npsoftdev.fixsimulator.user.YamlUserPreferencesService;
 import org.apache.wicket.ISessionListener;
+import org.apache.wicket.protocol.http.ResourceIsolationRequestCycleListener;
 import org.apache.wicket.request.cycle.IRequestCycleListener;
 import org.apache.wicket.request.cycle.RequestCycle;
 import org.apache.wicket.request.http.WebRequest;
+import org.apache.wicket.request.http.WebResponse;
 import org.apache.wicket.Component;
 import org.apache.wicket.Page;
 import org.apache.wicket.RestartResponseAtInterceptPageException;
@@ -101,6 +103,21 @@ public class FixSimulatorApplication extends WebApplication {
     public void init() {
         super.init();
         getMarkupSettings().setDefaultMarkupEncoding("UTF-8");
+
+        // CSRF protection: reject cross-origin state-mutating requests by
+        // checking Origin / Referer against the server's own host.
+        getRequestCycleListeners().add(new ResourceIsolationRequestCycleListener());
+
+        // Security response headers on every page response
+        getRequestCycleListeners().add(new IRequestCycleListener() {
+            @Override
+            public void onEndRequest(RequestCycle cycle) {
+                if (cycle.getResponse() instanceof WebResponse webResponse) {
+                    webResponse.addHeader("X-Frame-Options", "DENY");
+                    webResponse.addHeader("Referrer-Policy", "no-referrer");
+                }
+            }
+        });
 
         // Allow Bootstrap + Bootstrap Icons CDN
         getCspSettings().blocking()

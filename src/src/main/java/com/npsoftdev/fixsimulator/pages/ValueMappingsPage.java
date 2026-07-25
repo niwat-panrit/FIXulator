@@ -149,7 +149,7 @@ public class ValueMappingsPage extends BasePage {
                     @Override
                     protected void updateAjaxAttributes(AjaxRequestAttributes attrs) {
                         super.updateAjaxAttributes(attrs);
-                        String safe = name.replace("'", "\\'");
+                        String safe = JsEscape.forSingleQuotedLiteral(name);
                         attrs.getAjaxCallListeners().add(new AjaxCallListener()
                                 .onPrecondition("return confirm('Delete mapping \\'" + safe
                                         + "\\' and all its entries?');"));
@@ -281,7 +281,7 @@ public class ValueMappingsPage extends BasePage {
                     @Override
                     protected void updateAjaxAttributes(AjaxRequestAttributes attrs) {
                         super.updateAjaxAttributes(attrs);
-                        String safe = e.key.replace("'", "\\'");
+                        String safe = JsEscape.forSingleQuotedLiteral(e.key);
                         attrs.getAjaxCallListeners().add(new AjaxCallListener()
                                 .onPrecondition("return confirm('Remove entry \\'" + safe + "\\'?');"));
                     }

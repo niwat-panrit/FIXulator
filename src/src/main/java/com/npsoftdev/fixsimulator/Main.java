@@ -2,6 +2,7 @@ package com.npsoftdev.fixsimulator;
 
 import org.eclipse.jetty.ee10.webapp.WebAppContext;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.ee10.servlet.SessionHandler;
 
 import java.net.URL;
 import java.nio.file.Files;
@@ -48,6 +49,14 @@ public class Main {
         String base = webXml.toExternalForm();
         base = base.substring(0, base.length() - "WEB-INF/web.xml".length());
         context.setBaseResourceAsString(base);
+
+        // Harden the JSESSIONID cookie: HttpOnly prevents JS access;
+        // SameSite=Strict blocks cross-site requests from carrying the cookie.
+        // (Secure flag is omitted here — enable it once TLS is configured.)
+        SessionHandler sessionHandler = new SessionHandler();
+        sessionHandler.getSessionCookieConfig().setHttpOnly(true);
+        sessionHandler.getSessionCookieConfig().setAttribute("SameSite", "Strict");
+        context.setSessionHandler(sessionHandler);
 
         server.setHandler(context);
         server.start();

@@ -199,9 +199,7 @@ public class ConnectionManagementPage extends BasePage {
                     @Override
                     protected void updateAjaxAttributes(AjaxRequestAttributes attributes) {
                         super.updateAjaxAttributes(attributes);
-                        String safeName = s.name()
-                                .replace("\\", "\\\\")
-                                .replace("'", "\\'");
+                        String safeName = JsEscape.forSingleQuotedLiteral(s.name());
                         attributes.getAjaxCallListeners().add(new AjaxCallListener()
                                 .onPrecondition("return confirm('Delete connection \\'" + safeName
                                         + "\\'?\\nIf currently connected it will be disconnected first."

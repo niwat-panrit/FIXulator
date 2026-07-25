@@ -309,7 +309,8 @@ public class GatewayConnectionService implements ConnectionService, Serializable
             int tag;
             try { tag = Integer.parseInt(pair.substring(0, eq).trim()); }
             catch (NumberFormatException e) { continue; }
-            String value = pair.substring(eq + 1);
+            // Strip embedded SOH to prevent FIX tag injection via user-supplied values
+            String value = pair.substring(eq + 1).replace("\u0001", "");
 
             if (tag == MsgType.FIELD) { msgType = value; continue; }
             if (ENGINE_OWNED_TAGS.contains(tag)) continue;

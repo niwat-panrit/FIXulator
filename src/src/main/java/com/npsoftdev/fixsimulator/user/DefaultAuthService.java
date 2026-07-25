@@ -114,8 +114,8 @@ public class DefaultAuthService implements AuthService {
 
     // ── Password utilities ────────────────────────────────────────────────────
 
-    /** Hashes a plaintext password with BCrypt. */
+    /** Hashes a plaintext password with BCrypt (cost factor 12). */
     public static String hashPassword(String plaintext) {
-        return BCrypt.hashpw(plaintext, BCrypt.gensalt());
+        return BCrypt.hashpw(plaintext, BCrypt.gensalt(12));
     }
 }

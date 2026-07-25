@@ -209,7 +209,7 @@ public class OrdersPage extends BasePage {
                     @Override
                     protected void updateAjaxAttributes(AjaxRequestAttributes attributes) {
                         super.updateAjaxAttributes(attributes);
-                        String safe = clOrdId.replace("'", "\\'");
+                        String safe = JsEscape.forSingleQuotedLiteral(clOrdId);
                         attributes.getAjaxCallListeners().add(new AjaxCallListener()
                                 .onPrecondition("return confirm('Cancel order \\'" + safe + "\\'?');"));
                     }

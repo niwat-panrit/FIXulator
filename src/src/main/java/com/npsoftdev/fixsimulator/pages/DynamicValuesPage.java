@@ -106,7 +106,7 @@ public class DynamicValuesPage extends BasePage {
                     @Override
                     protected void updateAjaxAttributes(AjaxRequestAttributes attrs) {
                         super.updateAjaxAttributes(attrs);
-                        String safe = def.name().replace("'", "\\'");
+                        String safe = JsEscape.forSingleQuotedLiteral(def.name());
                         attrs.getAjaxCallListeners().add(new AjaxCallListener()
                                 .onPrecondition("return confirm('Remove custom value \\'" + safe + "\\'?');"));
                     }

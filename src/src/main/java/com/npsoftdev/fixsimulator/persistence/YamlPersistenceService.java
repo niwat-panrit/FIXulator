@@ -113,7 +113,9 @@ public class YamlPersistenceService implements Serializable {
                 // Emit polymorphic type as a regular `type:` property rather than
                 // a native YAML type tag (`!<typename>`), which is harder to edit by hand.
                 .disable(YAMLGenerator.Feature.USE_NATIVE_TYPE_ID)
-                .enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
+                // MINIMIZE_QUOTES removed: it causes type confusion where string values
+                // like "true", "null", or "1234" are written as unquoted YAML scalars
+                // and then deserialized as booleans / null / integers instead of strings.
                 .build();
         return new ObjectMapper(factory)
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

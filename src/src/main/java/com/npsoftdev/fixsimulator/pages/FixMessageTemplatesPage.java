@@ -158,7 +158,7 @@ public class FixMessageTemplatesPage extends BasePage {
                     protected void updateAjaxAttributes(AjaxRequestAttributes attrs) {
                         super.updateAjaxAttributes(attrs);
                         if (!t.isDeletionProtected()) {
-                            String safe = t.name().replace("'", "\\'");
+                            String safe = JsEscape.forSingleQuotedLiteral(t.name());
                             attrs.getAjaxCallListeners().add(new AjaxCallListener()
                                     .onPrecondition("return confirm('Delete template \\'" + safe + "\\'?');"));
                         } else {

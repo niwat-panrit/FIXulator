@@ -80,6 +80,7 @@ public class LoginPage extends WebPage {
                     cookie.setMaxAge(30 * 24 * 3600); // 30 days
                     cookie.setHttpOnly(true);
                     cookie.setPath("/");
+                    cookie.setAttribute("SameSite", "Strict");
                     ((WebResponse) getRequestCycle().getResponse()).addCookie(cookie);
                 }
 

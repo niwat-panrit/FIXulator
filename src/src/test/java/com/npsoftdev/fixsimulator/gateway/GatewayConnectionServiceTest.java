@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import quickfix.Message;
 import quickfix.SessionID;
 
 import java.util.ArrayList;
@@ -423,6 +424,56 @@ class GatewayConnectionServiceTest {
             svc.deleteSession(SID_A.toString());
 
             assertEquals(List.of(SID_A.toString()), deletedIds);
+        }
+    }
+
+    // ── sendRaw SOH injection prevention ─────────────────────────────────────
+
+    @Nested
+    class SendRaw {
+
+        @Test
+        void sendRaw_normalMessage_sendsFixMessage() throws Exception {
+            sessionIDs.put(SID_A.toString(), SID_A);
+            // 35=D|55=AAPL|38=100 — pipe is the delimiter
+            service.sendRaw(SID_A.toString(), "35=D|55=AAPL|38=100", "|");
+            verify(facade).sendToTarget(any(Message.class), eq(SID_A));
+        }
+
+        @Test
+        void sendRaw_valueContainingSoh_strippedBeforeWrite() throws Exception {
+            sessionIDs.put(SID_A.toString(), SID_A);
+            // Attempt injection: symbol value contains embedded SOH + extra tag
+            // "55=AAPL\x0149=INJECTED" should write tag 55 = "AAPL" (SOH stripped),
+            // not create a second tag 49 = INJECTED
+            org.mockito.ArgumentCaptor<Message> captor =
+                    org.mockito.ArgumentCaptor.forClass(Message.class);
+
+            service.sendRaw(SID_A.toString(), "35=D|55=AAPL\u000149=INJECTED", "|");
+
+            verify(facade).sendToTarget(captor.capture(), eq(SID_A));
+            Message sent = captor.getValue();
+
+            // Tag 55 must be set — its value must not contain SOH
+            String symbolValue = sent.getString(55);
+            assertFalse(symbolValue.contains("\u0001"),
+                    "Field value must not contain SOH after sanitization");
+            // Tag 49 (SenderCompID) is engine-owned and must NOT be written to body by sendRaw
+            assertFalse(sent.isSetField(49),
+                    "Injected engine-owned tag must not appear in message body");
+        }
+
+        @Test
+        void sendRaw_missingMsgType_throwsIllegalArgument() {
+            sessionIDs.put(SID_A.toString(), SID_A);
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.sendRaw(SID_A.toString(), "55=AAPL|38=100", "|"));
+        }
+
+        @Test
+        void sendRaw_unknownSession_throwsIllegalArgument() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.sendRaw("GHOST:SESSION", "35=D|55=AAPL", "|"));
         }
     }
 

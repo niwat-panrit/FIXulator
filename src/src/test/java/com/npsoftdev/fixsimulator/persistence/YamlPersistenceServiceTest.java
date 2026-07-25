@@ -110,6 +110,32 @@ class YamlPersistenceServiceTest {
         assertTrue(nested.exists("file.yaml"));
     }
 
+    // ── String type-safety (MINIMIZE_QUOTES removed) ──────────────────────────
+
+    @Test
+    void save_booleanLikeString_roundTripsAsString() throws IOException {
+        yaml.save("bool.yaml", new SimpleDto("true"));
+        SimpleDto loaded = yaml.load("bool.yaml", SimpleDto.class);
+        assertEquals("true", loaded.value,
+                "String 'true' must survive round-trip as a string, not be coerced to boolean");
+    }
+
+    @Test
+    void save_nullLikeString_roundTripsAsString() throws IOException {
+        yaml.save("null.yaml", new SimpleDto("null"));
+        SimpleDto loaded = yaml.load("null.yaml", SimpleDto.class);
+        assertEquals("null", loaded.value,
+                "String 'null' must survive round-trip as a string, not be coerced to null");
+    }
+
+    @Test
+    void save_numericString_roundTripsAsString() throws IOException {
+        yaml.save("number.yaml", new SimpleDto("1234"));
+        SimpleDto loaded = yaml.load("number.yaml", SimpleDto.class);
+        assertEquals("1234", loaded.value,
+                "Numeric string '1234' must survive round-trip as a string, not as an integer");
+    }
+
     // ── DTOs ─────────────────────────────────────────────────────────────────
 
     static class SimpleDto {
