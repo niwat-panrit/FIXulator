@@ -1,4 +1,6 @@
-package com.npsoftdev.fixsimulator.service;
+package com.npsoftdev.fixsimulator.logging;
+
+import com.npsoftdev.fixsimulator.service.LogFileService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

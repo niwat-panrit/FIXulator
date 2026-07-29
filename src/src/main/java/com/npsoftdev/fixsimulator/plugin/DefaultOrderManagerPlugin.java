@@ -18,7 +18,8 @@ import com.npsoftdev.fixsimulator.persistence.YamlPersistenceService;
 import com.npsoftdev.fixsimulator.template.YamlDynamicValueRegistry;
 import com.npsoftdev.fixsimulator.template.YamlTemplateRepository;
 import com.npsoftdev.fixsimulator.template.YamlValueMappingService;
-import com.npsoftdev.fixsimulator.service.DefaultLogFileService;
+import com.npsoftdev.fixsimulator.logging.DefaultLogFileService;
+import com.npsoftdev.fixsimulator.service.LogFileService;
 import com.npsoftdev.fixsimulator.user.DefaultAuthService;
 import com.npsoftdev.fixsimulator.user.RoleRegistry;
 import com.npsoftdev.fixsimulator.user.User;
@@ -175,7 +176,7 @@ public class DefaultOrderManagerPlugin implements SimulatorPlugin {
         String logDir  = System.getProperty("app.log.dir",  "logs");
         String logName = System.getProperty("app.log.name", "app");
         Path logFile   = Paths.get(logDir, logName + ".log");
-        DefaultLogFileService logFileService = new DefaultLogFileService(logFile);
+        LogFileService logFileService = new DefaultLogFileService(logFile);
 
         app.setOrderService(orderService);
         app.setTradeService(tradeService);

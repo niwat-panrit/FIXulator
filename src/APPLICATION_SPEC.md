@@ -67,11 +67,18 @@ com.npsoftdev.fixsimulator
 │   ├── GatewayOrderService.java        — order tracking & snapshot capture
 │   └── GatewayMessageLogService.java   — in-memory + restored message log
 │
-├── service/
+├── service/                     — ports only; no implementations live here
 │   ├── ConnectionService.java   — port: connect/disconnect/status/seq
 │   ├── MessageLogService.java   — port: getMessages(sessionId)
 │   ├── OrderService.java        — port: listOrders, sendNewOrder, cancelOrder
-│   └── TradeService.java        — port: listTrades
+│   ├── TradeService.java        — port: listTrades
+│   └── LogFileService.java      — port: read the active Logback log file
+│
+├── logging/
+│   └── DefaultLogFileService.java — reads the Logback rolling file; 5 MB cap
+│                                    per readFrom call. Not Serializable —
+│                                    holds a Path, and is never held in
+│                                    Wicket page state.
 │
 ├── template/
 │   ├── FieldValue.java          — sealed: Literal | UserInput | Placeholder |
