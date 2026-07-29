@@ -60,7 +60,7 @@ Run the test suite on its own with:
 cd src && mvn test
 ```
 
-Logs are written to `src/logs/`. See [`src/TEMPLATE_FEATURE_SPEC.md`](src/TEMPLATE_FEATURE_SPEC.md) for the full application specification.
+Logs are written to `src/logs/`. See [`src/APPLICATION_SPEC.md`](src/APPLICATION_SPEC.md) for the full application specification.
 
 ---
 
@@ -104,7 +104,7 @@ FIXulator/
 │   ├── data/               # YAML config: users, templates, value mappings
 │   ├── logs/               # Runtime logs
 │   ├── target/             # Build output — fix-simulator.jar
-│   └── TEMPLATE_FEATURE_SPEC.md   # Full application specification
+│   └── APPLICATION_SPEC.md # Full application specification
 ├── Samples/                # Reference Wicket / JSF sample apps
 ├── .gitignore
 └── README.md

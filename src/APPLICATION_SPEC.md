@@ -31,7 +31,7 @@ initiator simulator**.  It lets QA engineers and developers:
 | Language | Java 17 |
 | Build | Maven (fat JAR via Maven Shade plugin) |
 | HTTP server | Embedded Jetty (started by `Main.java`) |
-| Web framework | Apache Wicket 9.x (server-side component model) |
+| Web framework | Apache Wicket 10.3.0 (server-side component model) |
 | FIX engine | QuickFIX/J 2.3.1 (initiator mode) |
 | Serialisation | Jackson + jackson-dataformat-yaml |
 | Password hashing | jBCrypt |
@@ -154,6 +154,8 @@ com.npsoftdev.fixsimulator
 | `users.yaml.sample` | Starter template (committed) | manual |
 | `remember-me-tokens.yaml` | Browser remember-me tokens (30-day TTL) | `DefaultRememberMeService` |
 | `user-preferences.yaml` | Per-user last-active-session prefs | `YamlUserPreferencesService` |
+| `templates.yaml` | FIX message templates | `YamlTemplateRepository` |
+| `dynamic-values.yaml` | Custom dynamic value definitions | `YamlDynamicValueRegistry` |
 | `value-mappings.yaml` | Named key→value mapping tables | `YamlValueMappingService` |
 | `orders-*.yaml` | Persisted order maps per session | `GatewayOrderService` |
 | `trades-*.yaml` | Persisted trade maps per session | `GatewayOrderService` |
@@ -278,12 +280,15 @@ These are set by the QuickFIX/J engine and are silently skipped by the builder
 and stripped by `captureFromMessage`.
 
 ### Persistence
-Templates are currently stored in-memory (`InMemoryTemplateRepository`).
-Value mappings are persisted to `data/value-mappings.yaml`
-(`YamlValueMappingService`).
+Templates are persisted to `data/templates.yaml` (`YamlTemplateRepository`),
+value mappings to `data/value-mappings.yaml` (`YamlValueMappingService`), and
+custom dynamic values to `data/dynamic-values.yaml` (`YamlDynamicValueRegistry`).
+All three are wired in `DefaultOrderManagerPlugin` and share one
+`YamlPersistenceService` instance, so every write is atomic (tmp → rename).
 
-> **Note for future work:** Implement `YamlTemplateRepository` (or
-> JSON-per-file) following the `YamlPersistenceService` atomic-write pattern.
+`InMemoryTemplateRepository` and `InMemoryDynamicValueRegistry` remain as the
+non-persistent implementations of their ports — neither is wired into the
+running application; only the former has a unit test.
 
 ### Seeded built-in templates
 `DefaultOrderManagerPlugin` seeds:
