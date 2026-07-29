@@ -37,20 +37,30 @@ claude
 
 ## Running the Application
 
-The application is a Maven-based Java project (Apache Wicket + embedded Jetty), located in the `src/` directory.
+The application is a Maven-based Java project (Apache Wicket + embedded Jetty), located in the `src/` directory. Maven Shade builds a self-contained fat JAR whose `Main` class starts Jetty — there is no servlet container to deploy to and no `jetty:run` goal.
 
 ```bash
-# Start the dev server (recommended)
-cd src && mvn jetty:run
+cd src
+
+# Build the fat JAR → target/fix-simulator.jar
+mvn package -q
+
+# Run it (default port 8080)
+java -jar target/fix-simulator.jar
+
+# Run it on a different port
+java -jar target/fix-simulator.jar 9090
 ```
 
 The app will be available at **http://localhost:8080**.
 
-To build and run the packaged WAR instead:
+Run the test suite on its own with:
 
 ```bash
-cd src && mvn package && java -jar target/*.war
+cd src && mvn test
 ```
+
+Logs are written to `src/logs/`. See [`src/TEMPLATE_FEATURE_SPEC.md`](src/TEMPLATE_FEATURE_SPEC.md) for the full application specification.
 
 ---
 
@@ -88,7 +98,14 @@ FIXulator/
 │   ├── devcontainer.json   # Container configuration
 │   ├── Dockerfile          # Image definition (JDK 17 + 21, Maven)
 │   └── post-create.sh      # One-time setup script
-├── src/                    # Java source (added by Claude Code)
+├── src/                    # Maven project root
+│   ├── pom.xml
+│   ├── src/main/java/      # Java source
+│   ├── data/               # YAML config: users, templates, value mappings
+│   ├── logs/               # Runtime logs
+│   ├── target/             # Build output — fix-simulator.jar
+│   └── TEMPLATE_FEATURE_SPEC.md   # Full application specification
+├── Samples/                # Reference Wicket / JSF sample apps
 ├── .gitignore
 └── README.md
 ```
@@ -117,8 +134,7 @@ claude --dangerously-skip-permissions
 
 | Port | Purpose |
 |---|---|
-| `8080` | Application server |
-| `5005` | JVM remote debug |
+| `8080` | Application server (override with `java -jar target/fix-simulator.jar <port>`) |
 
 ---
 
