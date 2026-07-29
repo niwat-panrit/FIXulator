@@ -161,6 +161,43 @@ class DefaultLogFileServiceTest {
         assertTrue(read.size() * 1024L <= MAX_READ_BYTES);
     }
 
+    // ── readFrom — UTF-8 boundary safety ──────────────────────────────────────
+
+    @Test
+    void readFrom_capSplittingMultiByteCharDoesNotEmitReplacementChar() throws IOException {
+        // Lay out the file so the 5 MB cut lands *inside* a 2-byte character:
+        // MAX-1 ASCII bytes, then 'é' (0xC3 0xA9) straddling the boundary.
+        String filler = "a".repeat((int) MAX_READ_BYTES - 1);
+        Files.writeString(logFile, filler + "é\nrest of the log\n", StandardCharsets.UTF_8);
+
+        List<String> read = service.readFrom(0);
+
+        assertFalse(String.join("", read).contains("�"),
+                "a character split by the cap must be left for the next read, not mangled");
+        assertEquals(1, read.size());
+        assertEquals(filler, read.get(0), "the truncated 'é' is dropped, the ASCII run is intact");
+    }
+
+    @Test
+    void readFrom_multiByteCharsWithinWindowSurviveIntact() throws IOException {
+        writeLines("ราคา 100", "naïve café", "日本語ログ");
+        assertEquals(List.of("ราคา 100", "naïve café", "日本語ログ"), service.readFrom(0));
+    }
+
+    @Test
+    void readFrom_partialTrailingCharIsReturnedOnceCompleted() throws IOException {
+        // Simulate a writer caught mid-character: only the first byte of 'é' is on disk.
+        Files.write(logFile, new byte[] { 'o', 'k', '\n', (byte) 0xC3 });
+        assertEquals(List.of("ok"), service.readFrom(0),
+                "an incomplete trailing char is withheld rather than mangled");
+
+        // The writer finishes the character and the line.
+        Files.write(logFile, new byte[] { (byte) 0xA9, '\n' },
+                java.nio.file.StandardOpenOption.APPEND);
+        assertEquals(List.of("é"), service.readFrom(3),
+                "the withheld byte is picked up on the next read");
+    }
+
     @Test
     void readFrom_capAppliesRelativeToOffsetNotFileStart() throws IOException {
         String line = "y".repeat(1023);

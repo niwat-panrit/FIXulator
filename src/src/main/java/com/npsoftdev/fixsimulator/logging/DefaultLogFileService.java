@@ -7,6 +7,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -77,11 +81,38 @@ public class DefaultLogFileService implements LogFileService {
             int read = raf.read(buf);
             if (read <= 0) return List.of();
 
-            String content = new String(buf, 0, read, StandardCharsets.UTF_8);
-            return content.lines().collect(Collectors.toList());
+            return decodeIgnoringPartialTail(buf, read).lines().collect(Collectors.toList());
         } catch (IOException e) {
             log.warn("Failed to read log file from offset {}: {}", byteOffset, e.getMessage());
             return List.of();
         }
+    }
+
+    /**
+     * Decodes {@code length} bytes of {@code buf} as UTF-8, discarding an incomplete
+     * multi-byte sequence at the end.
+     *
+     * <p>The read window is cut at an arbitrary byte position — by {@link #MAX_READ_BYTES},
+     * or by the writer being mid-line at EOF — so its last character may be truncated.
+     * Decoding those bytes as if they were complete would emit U+FFFD. Passing
+     * {@code endOfInput = false} makes the decoder stop before a partial trailing
+     * sequence and leave it unconsumed instead; the bytes are picked up on the next
+     * call, once the rest of the character has been written.</p>
+     *
+     * <p>Genuinely malformed bytes in the middle of the window are still replaced,
+     * so a corrupt log never costs us the readable lines around it.</p>
+     */
+    private static String decodeIgnoringPartialTail(byte[] buf, int length) {
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPLACE)
+                .onUnmappableCharacter(CodingErrorAction.REPLACE);
+
+        ByteBuffer in = ByteBuffer.wrap(buf, 0, length);
+        // UTF-8 never yields more chars than bytes, so this is always large enough.
+        CharBuffer out = CharBuffer.allocate(length);
+
+        decoder.decode(in, out, false);
+        out.flip();
+        return out.toString();
     }
 }
