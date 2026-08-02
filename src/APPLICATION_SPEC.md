@@ -54,102 +54,108 @@ java -jar target/fix-simulator.jar 9090     # custom port
 
 ## 3. Package Layout
 
+Source is grouped by **plugin**, not by technical layer.  `core/` is the platform
+that loads plugins and provides the shell; each plugin under `plugins/` owns its
+own ports, implementations, and UI.
+
+Inside every plugin:
+
+| Sub-package | Holds | Visible to |
+|---|---|---|
+| `api/` | Ports and shared types | Other plugins compile against this |
+| `internal/` | Implementations | The plugin itself |
+| `ui/` | Wicket pages/panels + their `.html`/`.js`/`.css` | The plugin itself |
+
+> Wicket resolves markup by classpath location, so a page's `.html` (and any
+> `.js`/`.css` loaded via `PackageResourceReference`) must stay in the same
+> package as its class.  Move them together, always.
+
 ```
 com.npsoftdev.fixsimulator
-├── Main.java                    — entry point, starts Jetty
-├── FixSimulatorApplication.java — Wicket WebApplication; wires all services;
-│                                  hosts IRequestCycleListener for remember-me
-├── FixSimulatorSession.java     — Wicket WebSession; holds authenticatedUser,
-│                                  activeSessionId, activityDirection, etc.
+├── Main.java                       — entry point, starts Jetty
 │
-├── gateway/
-│   ├── GatewayConnectionService.java   — QuickFIX/J initiator management
-│   ├── GatewayOrderService.java        — order tracking & snapshot capture
-│   └── GatewayMessageLogService.java   — in-memory + restored message log
+├── core/                           — the platform
+│   ├── FixSimulatorApplication.java  — Wicket WebApplication; wires all
+│   │                                   services; hosts IRequestCycleListener
+│   │                                   for remember-me
+│   ├── FixSimulatorSession.java      — WebSession; authenticatedUser,
+│   │                                   activeSessionId, activityDirection
+│   ├── plugin/                     — the plugin contract itself
+│   │   ├── SimulatorPlugin.java      — id, label, icon, NavSection, pageClass,
+│   │   │                               initialize(app)
+│   │   ├── PluginRegistry.java
+│   │   └── NavSection.java           — OVERVIEW | MONITORING | ADMIN
+│   ├── ui/                         — app shell, owned by no plugin
+│   │   ├── BasePage.java (+ .html)   — topbar, session switcher, nav, seqno
+│   │   │                               modal, userZoneId()
+│   │   ├── app.css
+│   │   ├── HomePage.java (+ .html)   — dashboard: stats + recent messages
+│   │   ├── JsEscape.java             — public; used by pages in every plugin
+│   │   └── PagePermissions.java      — page → required Permission mapping
+│   └── logging/
+│       ├── LogFileService.java       — port: read the active Logback file
+│       ├── DefaultLogFileService.java  — 5 MB cap per readFrom; UTF-8 safe
+│       │                                 across the read boundary
+│       └── SystemLogsPage.java (+ .html/.css/.js)
 │
-├── service/                     — ports only; no implementations live here
-│   ├── ConnectionService.java   — port: connect/disconnect/status/seq
-│   ├── MessageLogService.java   — port: getMessages(sessionId)
-│   ├── OrderService.java        — port: listOrders, sendNewOrder, cancelOrder
-│   ├── TradeService.java        — port: listTrades
-│   └── LogFileService.java      — port: read the active Logback log file
-│
-├── logging/
-│   └── DefaultLogFileService.java — reads the Logback rolling file; 5 MB cap
-│                                    per readFrom call. Not Serializable —
-│                                    holds a Path, and is never held in
-│                                    Wicket page state.
-│
-├── template/
-│   ├── FieldValue.java          — sealed: Literal | UserInput | Placeholder |
-│   │                              Derived | Enumeration
-│   ├── FieldSpec.java           — record(tag, FieldValue) + factory methods
-│   ├── FixMessageTemplate.java  — immutable template with Builder API
-│   ├── TemplateScope.java       — sealed: Global | Session(sessionId)
-│   ├── PlaceholderType.java     — ORDER_ID | TRANSACT_TIME | SENDING_TIME |
-│   │                              UUID | SESSION_SENDER | SESSION_TARGET
-│   ├── PlaceholderResolver.java — port
-│   ├── DefaultPlaceholderResolver.java
-│   ├── ValueMappingService.java — port: named string→string lookup tables
-│   ├── InMemoryValueMappingService.java (seeded with symbol-to-isin)
-│   ├── TemplateRepository.java  — port: CRUD + findVisibleTo(sessionId)
-│   ├── InMemoryTemplateRepository.java  (ConcurrentHashMap, not persisted)
-│   ├── MessageDispatcher.java   — port: dispatch(Message, SessionID)
-│   ├── FixMessageBuilder.java   — port: build(template, overrides, sessionId)
-│   ├── DefaultFixMessageBuilder.java (two-pass resolution)
-│   ├── TemplateService.java     — UI-facing façade port
-│   ├── DefaultTemplateService.java
-│   ├── MessageSnapshot.java     — record: header/body tags captured at send
-│   ├── FixHeaderFields.java     — ENGINE_OWNED set: {8,9,10,34,35,49,52,56}
-│   ├── DynamicValueRegistry.java
-│   └── YamlValueMappingService.java  (persists to value-mappings.yaml)
-│
-├── user/
-│   ├── User.java                — immutable record+Builder: username,
-│   │                              displayName, passwordHash, email, roles[],
-│   │                              active, maxSessions, timezone
-│   ├── UserRepository.java      — port
-│   ├── YamlUserRepository.java  — persists to data/users.yaml
-│   ├── AuthService.java         — port: authenticate, session tracking
-│   ├── DefaultAuthService.java  — BCrypt; in-memory session counters
-│   ├── RememberMeService.java   — port: createToken, resolveToken, deleteToken
-│   ├── DefaultRememberMeService.java — persists to data/remember-me-tokens.yaml
-│   ├── UserPreferencesService.java   — port: getLastActiveSession, set…
-│   ├── YamlUserPreferencesService.java — persists to data/user-preferences.yaml
-│   ├── RoleRegistry.java
-│   └── Permission.java
-│
-├── persistence/
-│   └── YamlPersistenceService.java  — atomic write: tmp → rename; shared by
-│                                       all YAML-backed repos
-│
-├── plugin/
-│   ├── SimulatorPlugin.java
-│   ├── PluginRegistry.java
-│   ├── NavSection.java          — OVERVIEW | MONITORING | ADMIN
-│   ├── DefaultFixGatewayPlugin.java
-│   └── DefaultOrderManagerPlugin.java — constructs and wires all order/
-│                                         template/user services; seeds templates
-│
-└── pages/
-    ├── BasePage.java            — abstract; topbar, session switcher, nav,
-    │                              seqno modal, userZoneId() helper
-    ├── LoginPage.java           — sets remember-me cookie on login
-    ├── HomePage.java            — dashboard: stats + recent messages
-    ├── ConnectionManagementPage.java
-    ├── OrdersPage.java          — New Order + Amend + Cancel + filter table
-    ├── TradesPage.java          — execution reports table
-    ├── FixActivityPage.java     — full FIX message log with detail modal
-    ├── FixMessageTemplatesPage.java
-    ├── FixMessageTemplateFormPage.java (add/edit template)
-    │   └── TemplateFormPanel.*  — reusable panel for template field editor
-    ├── ComposeMessagePanel.*    — reusable offcanvas panel (raw FIX send)
-    ├── DynamicValuesPage.java
-    ├── ValueMappingsPage.java
-    ├── UserManagementPage.java
-    ├── SystemLogsPage.java
-    └── PagePermissions.java     — page → required Permission mapping
+└── plugins/
+    ├── connection/                 — 1. FIX connections
+    │   ├── api/       ConnectionService, MessageLogService, SessionFacade,
+    │   │              FixMessageListener
+    │   ├── internal/  GatewayConnectionService, GatewayMessageLogService,
+    │   │              LiveSessionFacade
+    │   ├── ui/        ConnectionManagementPage, FixActivityPage (+ .js),
+    │   │              ComposeMessagePanel (+ .js)
+    │   └── DefaultFixGatewayPlugin.java
+    │
+    ├── order/                      — 2. orders + trades (needs connection)
+    │   ├── api/       OrderService, TradeService
+    │   ├── internal/  GatewayOrderService, GatewayTradeService,
+    │   │              OrderTradeCacheService
+    │   ├── ui/        OrdersPage, TradesPage, DynamicOrdersPage,
+    │   │              OrderTemplatesPage
+    │   └── DefaultOrderManagerPlugin.java  — also wires template + user services
+    │
+    ├── template/                   — 3. templates, dynamic values, mappings
+    │   ├── api/       TemplateService, TemplateRepository, ValueMappingService,
+    │   │              DynamicValueRegistry, FixMessageBuilder, MessageDispatcher,
+    │   │              PlaceholderResolver, FieldSpec, FieldValue,
+    │   │              FixMessageTemplate, TemplateScope, PlaceholderType,
+    │   │              MessageSnapshot, DynamicValueDefinition, FixHeaderFields
+    │   ├── internal/  Default* (builder, resolver, service),
+    │   │              InMemory* (repository, registry, mappings),
+    │   │              Yaml* (repository, registry, mappings)
+    │   └── ui/        FixMessageTemplatesPage, FixMessageTemplateFormPage,
+    │                  TemplateFormPanel (+ .js), DynamicValuesPage,
+    │                  ValueMappingsPage
+    │
+    ├── persistence/                — 4. persistence for every other plugin
+    │   └── api/       YamlPersistenceService  — atomic write: tmp → rename
+    │
+    └── user/                       — 5. authentication + authorization
+        ├── api/       AuthService, UserRepository, RememberMeService,
+        │              UserPreferencesService, User, Permission, RoleRegistry
+        ├── internal/  DefaultAuthService, DefaultRememberMeService,
+        │              YamlUserRepository, YamlUserPreferencesService
+        └── ui/        LoginPage (+ .css), UserManagementPage
 ```
+
+### Known coupling to resolve
+
+The grouping is done; the decoupling is not.  These are the edges that still
+stop a plugin from being independently loadable:
+
+1. `order/api/OrderService` imports `template/api/MessageSnapshot`, so plugin 2
+   requires plugin 3 at compile time.  It should be optional.
+2. `core/ui/HomePage` calls `FixActivityPage.parseTags/msgTypeName/buildSummary`
+   — the dashboard reaches into a plugin page for FIX formatting.  Those helpers
+   were made `public` so the split would compile; they belong in a shared
+   FIX-format utility.
+3. `persistence` exposes the concrete `YamlPersistenceService` as its `api`.
+   Extracting a `PersistenceService` port would let a plugin persist elsewhere.
+4. `DefaultFixGatewayPlugin` is instantiated nine times as a generic nav-entry
+   holder for unrelated pages.  Nav registration and plugin identity should be
+   separate concerns.
 
 ---
 
