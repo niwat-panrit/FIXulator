@@ -7,7 +7,6 @@ import java.util.Map;
 import com.npsoftdev.fixsimulator.core.logging.SystemLogsPage;
 import com.npsoftdev.fixsimulator.plugins.connection.ui.ConnectionManagementPage;
 import com.npsoftdev.fixsimulator.plugins.connection.ui.FixActivityPage;
-import com.npsoftdev.fixsimulator.plugins.order.ui.OrderTemplatesPage;
 import com.npsoftdev.fixsimulator.plugins.order.ui.OrdersPage;
 import com.npsoftdev.fixsimulator.plugins.order.ui.TradesPage;
 import com.npsoftdev.fixsimulator.plugins.template.ui.DynamicValuesPage;
@@ -37,7 +36,6 @@ public final class PagePermissions {
         REQUIRED.put(FixMessageTemplateFormPage.class, Permission.USE_VIEW_MANAGE_FIX_TEMPLATES);
         REQUIRED.put(DynamicValuesPage.class,         Permission.USE_VIEW_MANAGE_DYNAMIC_VALUES);
         REQUIRED.put(ValueMappingsPage.class,         Permission.USE_VIEW_MANAGE_VALUE_MAPPINGS);
-        REQUIRED.put(OrderTemplatesPage.class,        Permission.USE_VIEW_MANAGE_FIX_TEMPLATES);
         // HomePage → null (no specific permission required, any authenticated user)
     }
 

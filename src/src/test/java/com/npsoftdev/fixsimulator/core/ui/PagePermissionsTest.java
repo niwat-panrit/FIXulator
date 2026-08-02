@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.npsoftdev.fixsimulator.core.logging.SystemLogsPage;
 import com.npsoftdev.fixsimulator.plugins.connection.ui.ConnectionManagementPage;
 import com.npsoftdev.fixsimulator.plugins.connection.ui.FixActivityPage;
-import com.npsoftdev.fixsimulator.plugins.order.ui.OrderTemplatesPage;
 import com.npsoftdev.fixsimulator.plugins.order.ui.OrdersPage;
 import com.npsoftdev.fixsimulator.plugins.order.ui.TradesPage;
 import com.npsoftdev.fixsimulator.plugins.template.ui.DynamicValuesPage;
@@ -68,13 +67,6 @@ class PagePermissionsTest {
     void fixMessageTemplateFormPage_requiresUseViewManageFixTemplates() {
         assertEquals(Permission.USE_VIEW_MANAGE_FIX_TEMPLATES,
                 PagePermissions.forPage(FixMessageTemplateFormPage.class));
-    }
-
-    @Test
-    void orderTemplatesPage_requiresUseViewManageFixTemplates() {
-        assertEquals(Permission.USE_VIEW_MANAGE_FIX_TEMPLATES,
-                PagePermissions.forPage(OrderTemplatesPage.class),
-                "OrderTemplatesPage must require USE_VIEW_MANAGE_FIX_TEMPLATES (Tester role only)");
     }
 
     @Test

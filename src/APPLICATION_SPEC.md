@@ -112,8 +112,7 @@ com.npsoftdev.fixsimulator
     │   ├── api/       OrderService, TradeService
     │   ├── internal/  GatewayOrderService, GatewayTradeService,
     │   │              OrderTradeCacheService
-    │   ├── ui/        OrdersPage, TradesPage, DynamicOrdersPage,
-    │   │              OrderTemplatesPage
+    │   ├── ui/        OrdersPage, TradesPage
     │   └── DefaultOrderManagerPlugin.java  — also wires template + user services
     │
     ├── template/                   — 3. templates, dynamic values, mappings
