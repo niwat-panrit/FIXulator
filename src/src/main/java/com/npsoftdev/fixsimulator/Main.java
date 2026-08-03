@@ -1,9 +1,12 @@
 package com.npsoftdev.fixsimulator;
 
+import com.npsoftdev.fixsimulator.core.AppHome;
+
 import org.eclipse.jetty.ee10.webapp.WebAppContext;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.ee10.servlet.SessionHandler;
 
+import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,10 +23,11 @@ import java.util.TimeZone;
 public class Main {
 
     public static void main(String[] args) throws Exception {
-        // Both calls must happen before any SLF4J logger is first accessed,
+        // All three calls must happen before any SLF4J logger is first accessed,
         // so that Logback picks up the system properties when it initialises.
         applyOsTimezone();
         applyStartupLogName();
+        applyLogDirectory();
 
         int port = 8080;
         for (String arg : args) {
@@ -77,6 +81,31 @@ public class Main {
         String ts = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
         System.setProperty("app.log.name", "app-" + ts);
+    }
+
+    /**
+     * Points {@code app.log.dir} — which {@code logback.xml} reads when it
+     * initialises — at {@code <app home>/logs}, and creates the directory.
+     *
+     * <p>In a source checkout the app home is the working directory, so this
+     * resolves to the same {@code logs/} used before. In an installed build it
+     * moves logging under the per-user application-data directory, because the
+     * install location is not writable. See {@link AppHome}.</p>
+     *
+     * <p>No-op if the property is already set externally.</p>
+     */
+    private static void applyLogDirectory() {
+        if (System.getProperty("app.log.dir") != null) return;
+        Path logDir = AppHome.resolve().resolve("logs");
+        try {
+            Files.createDirectories(logDir);
+        } catch (IOException e) {
+            // Leave the property unset and let Logback fall back to ./logs —
+            // failing to start over a log directory would be worse.
+            System.err.println("Could not create log directory " + logDir + ": " + e.getMessage());
+            return;
+        }
+        System.setProperty("app.log.dir", logDir.toString());
     }
 
     /**

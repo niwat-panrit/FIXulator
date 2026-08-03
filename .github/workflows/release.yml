@@ -1,0 +1,130 @@
+name: Build installers
+
+# jpackage cannot cross-compile, so each installer is built on its own runner.
+# Triggered by a version tag, or manually from the Actions tab.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for the installers (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+permissions:
+  contents: write        # needed only by the release job
+
+jobs:
+  # Run the suite once, on the JDK the project targets. The packaging scripts
+  # skip tests, so this is the gate that protects a release.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Run tests
+        working-directory: src
+        run: mvn -B test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            type: msi
+            artifact: windows-msi
+          - os: ubuntu-latest
+            type: deb
+            artifact: linux-deb
+          - os: ubuntu-latest
+            type: rpm
+            artifact: linux-rpm
+          - os: macos-latest
+            type: dmg
+            artifact: macos-dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'      # jpackage improvements; the app still targets 17
+          cache: maven
+
+      # jpackage shells out to these; the runners do not have them all preinstalled.
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot binutils rpm
+
+      - name: Install WiX (required for .msi)
+        if: matrix.type == 'msi'
+        run: dotnet tool install --global wix --version 4.0.5
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.version || '1.0.0' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build installer (Unix)
+        if: runner.os != 'Windows'
+        env:
+          APP_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          chmod +x packaging/jpackage.sh
+          ./packaging/jpackage.sh ${{ matrix.type }}
+
+      - name: Build installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\packaging\jpackage.ps1 -Type ${{ matrix.type }} -AppVersion ${{ steps.version.outputs.value }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fixulator-${{ matrix.artifact }}
+          path: |
+            src/target/installers/*.msi
+            src/target/installers/*.deb
+            src/target/installers/*.rpm
+            src/target/installers/*.dmg
+          if-no-files-found: error
+
+  # Attach every installer to the GitHub release for a tagged build.
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          body: |
+            FIXulator ${{ github.ref_name }}
+
+            Native installers with a bundled Java runtime — no JDK required.
+
+            | Platform | File |
+            |---|---|
+            | Windows | `.msi` |
+            | Debian / Ubuntu | `.deb` |
+            | Red Hat / Fedora | `.rpm` |
+            | macOS | `.dmg` |
+
+            **FIXulator is a testing tool. It is not intended for production
+            trading.** See NOTICE and the README disclaimer.

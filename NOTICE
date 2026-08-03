@@ -1,0 +1,25 @@
+FIXulator
+Copyright 2026 Niwat Panrit
+
+This product includes software developed by Niwat Panrit
+(https://github.com/niwat-panrit/FIXulator).
+
+Portions of this software were written with Claude (Anthropic).
+
+This software is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+FIXulator bundles or depends on the following third-party components,
+each under its own licence:
+
+  Apache Wicket          Apache License 2.0
+  Eclipse Jetty          Apache License 2.0 / Eclipse Public License 2.0
+  QuickFIX/J             QuickFIX/J licence (BSD-style)
+  Jackson                Apache License 2.0
+  Logback                Eclipse Public License 1.0 / LGPL 2.1
+  jBCrypt                ISC licence
+  Bootstrap              MIT licence (loaded from CDN, not bundled)

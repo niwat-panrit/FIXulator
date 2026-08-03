@@ -343,7 +343,7 @@ public class FixSimulatorApplication extends WebApplication {
     // ── Path helpers ──────────────────────────────────────────────────────────
 
     public Path resolveDataDirectory() {
-        return Paths.get(System.getProperty("user.dir"), "data");
+        return AppHome.resolve().resolve("data");
     }
 
     private Path resolveConfigFilePath() {
@@ -353,7 +353,7 @@ public class FixSimulatorApplication extends WebApplication {
                 return Paths.get(url.toURI());
             }
         } catch (Exception ignored) {}
-        return Paths.get(System.getProperty("user.dir"), "fix-gateway.cfg");
+        return AppHome.resolve().resolve("fix-gateway.cfg");
     }
 
     private SessionSettings loadFixSettings(Path configFilePath) {

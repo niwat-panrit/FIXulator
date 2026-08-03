@@ -80,6 +80,8 @@ com.npsoftdev.fixsimulator
 │   │                                   for remember-me
 │   ├── FixSimulatorSession.java      — WebSession; authenticatedUser,
 │   │                                   activeSessionId, activityDirection
+│   ├── AppHome.java                  — resolves the runtime home holding
+│   │                                   data/, logs/, fix-gateway.cfg
 │   ├── plugin/                     — the plugin contract itself
 │   │   ├── SimulatorPlugin.java      — id, label, icon, NavSection, pageClass,
 │   │   │                               initialize(app)
@@ -158,7 +160,20 @@ stop a plugin from being independently loadable:
 
 ---
 
-## 4. Data Files (all under `./data/` relative to working directory)
+## 4. Data Files (all under `<app home>/data/`)
+
+The **app home** is resolved by `core/AppHome.java`:
+
+1. `-Dfixulator.home=<path>` — explicit override, wins everywhere.
+2. `FIXULATOR_HOME` environment variable — same, for service managers.
+3. `-Dfixulator.packaged=true` (set by the jpackage launchers) — the per-user
+   application-data directory: `%LOCALAPPDATA%\FIXulator`,
+   `~/Library/Application Support/FIXulator`, or `$XDG_DATA_HOME/fixulator`.
+4. Otherwise the working directory — unchanged development behaviour.
+
+Installed builds must not use the working directory: jpackage installs into
+`/Applications`, `C:\Program Files`, or `/opt/fixulator`, none of which a normal
+user may write to.
 
 | File | Contents | Written by |
 |---|---|---|

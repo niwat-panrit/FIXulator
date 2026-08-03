@@ -1,8 +1,37 @@
 # FIXulator
 
-> Java application developed inside a sandboxed VS Code Dev Container.
+> A FIX protocol initiator simulator — connect sessions, send orders, and watch
+> the message flow, without a counterparty exchange.
 
-## Prerequisites (host machine)
+## ⚠️ Disclaimer — testing tool, not for production trading
+
+FIXulator exists to **test and develop** FIX integrations. It is not, and is not
+intended to be, production trading software. Do not point it at a live venue or
+use it to send real orders.
+
+It is provided **"AS IS", without warranty or condition of any kind**, and the
+authors accept no liability for any loss arising from its use — financial or
+otherwise. See [LICENSE](LICENSE) sections 7 and 8 for the binding text.
+
+## Install
+
+Native installers bundle their own Java runtime, so **no JDK is required**.
+Download the one for your platform from the
+[latest release](https://github.com/niwat-panrit/FIXulator/releases):
+
+| Platform | File |
+|---|---|
+| Windows | `.msi` |
+| Debian / Ubuntu | `.deb` |
+| Red Hat / Fedora | `.rpm` |
+| macOS | `.dmg` |
+
+An installed build keeps its data in your user profile, not next to the
+application — see [packaging/README.md](packaging/README.md) for the exact
+locations and how to override them. To build the installers yourself, see the
+same document.
+
+## Prerequisites (development, on the host machine)
 
 | Tool | Notes |
 |---|---|
@@ -145,7 +174,30 @@ claude --dangerously-skip-permissions
 | `fixulator-claude-config-*` | `~/.claude` | Claude Code auth & config |
 | `fixulator-m2` | `~/.m2/repository` | Maven dependency cache |
 
-# to enter shell inside container, either
+To enter a shell inside the container:
 
-docker exec -it <container_name_or_id> /bin/bash
-docker exec -it <container_name_or_id> sh
+```bash
+docker exec -it fix_simulator_dev /bin/bash
+```
+
+---
+
+## Licence
+
+Licensed under the [Apache License 2.0](LICENSE) — free to use, modify, and
+distribute, for **personal and commercial** purposes alike, including in closed-
+source products. Your obligations are essentially: keep the licence and
+copyright notice, state significant changes, and don't use the authors' names to
+endorse your derivative.
+
+The licence also disclaims all warranties and limits the authors' liability;
+[NOTICE](NOTICE) lists the third-party components and their licences.
+
+## Credits
+
+Created by **Niwat Panrit** — <https://github.com/niwat-panrit>.
+
+Built with **Claude** (Anthropic), which contributed to the implementation,
+tests, and documentation.
+
+Attribution is welcome but not required beyond what the licence asks for.
