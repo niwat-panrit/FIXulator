@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIXulator — User Guide</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f6f8fa;
+    --bg-inset: #eef1f4;
+    --fg: #1f2328;
+    --fg-muted: #59636e;
+    --border: #d8dee4;
+    --accent: #0969da;
+    --warn-bg: #fff8c5;
+    --warn-border: #d4a72c;
+    --warn-fg: #4d2d00;
+    --danger-bg: #ffebe9;
+    --danger-border: #ff8182;
+    --danger-fg: #82071e;
+    --code-bg: #f0f2f4;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --bg-soft: #161b22;
+      --bg-inset: #1c2128;
+      --fg: #e6edf3;
+      --fg-muted: #9198a1;
+      --border: #30363d;
+      --accent: #4493f8;
+      --warn-bg: #2d2611;
+      --warn-border: #9e6a03;
+      --warn-fg: #f0d38a;
+      --danger-bg: #2d1214;
+      --danger-border: #b62324;
+      --danger-fg: #ff9d9d;
+      --code-bg: #1c2128;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .wrap { display: flex; max-width: 1200px; margin: 0 auto; gap: 2.5rem; padding: 0 1.25rem; }
+  nav {
+    position: sticky; top: 0; align-self: flex-start;
+    width: 230px; flex: 0 0 230px;
+    max-height: 100vh; overflow-y: auto;
+    padding: 2rem 0; font-size: .9rem;
+  }
+  nav strong { display: block; margin: 1.25rem 0 .4rem; font-size: .74rem; text-transform: uppercase;
+               letter-spacing: .07em; color: var(--fg-muted); }
+  nav strong:first-child { margin-top: 0; }
+  nav a { display: block; padding: .2rem 0; color: var(--fg-muted); text-decoration: none; }
+  nav a:hover { color: var(--accent); }
+  main { flex: 1 1 auto; min-width: 0; padding: 2rem 0 5rem; }
+  header.title { padding: 2.5rem 0 1rem; border-bottom: 1px solid var(--border); margin-bottom: 2rem; }
+  header.title h1 { margin: 0 0 .3rem; font-size: 2.1rem; letter-spacing: -.02em; }
+  header.title p { margin: 0; color: var(--fg-muted); }
+  h2 { margin: 2.75rem 0 .85rem; padding-bottom: .35rem; font-size: 1.45rem;
+       border-bottom: 1px solid var(--border); letter-spacing: -.01em; scroll-margin-top: 1rem; }
+  h3 { margin: 1.9rem 0 .6rem; font-size: 1.1rem; scroll-margin-top: 1rem; }
+  p, li { color: var(--fg); }
+  code { background: var(--code-bg); padding: .15em .38em; border-radius: 5px;
+         font: .875em ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  pre { background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: .9rem 1rem; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: .85rem; line-height: 1.55; }
+  .tablewrap { overflow-x: auto; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { border: 1px solid var(--border); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 600; }
+  .note, .warn, .danger {
+    border: 1px solid var(--border); border-left-width: 4px;
+    background: var(--bg-soft); border-radius: var(--radius);
+    padding: .85rem 1rem; margin: 1.25rem 0;
+  }
+  .note { border-left-color: var(--accent); }
+  .warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-fg); }
+  .warn code { background: rgba(0,0,0,.08); }
+  .danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-fg); }
+  .danger code { background: rgba(0,0,0,.08); }
+  .note p:first-child, .warn p:first-child, .danger p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child, .danger p:last-child { margin-bottom: 0; }
+  ol.steps { padding-left: 1.25rem; }
+  ol.steps li { margin: .45rem 0; }
+  footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+           color: var(--fg-muted); font-size: .9rem; }
+  a { color: var(--accent); }
+  kbd { background: var(--bg-inset); border: 1px solid var(--border); border-bottom-width: 2px;
+        border-radius: 5px; padding: .1em .4em; font-size: .82em; }
+  @media (max-width: 900px) {
+    .wrap { display: block; padding: 0 1rem; }
+    nav { position: static; width: auto; max-height: none; padding: 1.5rem 0 0;
+          border-bottom: 1px solid var(--border); }
+    nav strong { margin-top: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <strong>Start here</strong>
+  <a href="#what">What FIXulator is</a>
+  <a href="#install">Install</a>
+  <a href="#first-run">First run &amp; sign in</a>
+  <a href="#tour">The interface</a>
+  <strong>Using it</strong>
+  <a href="#connections">FIX connections</a>
+  <a href="#orders">Orders</a>
+  <a href="#trades">Trades</a>
+  <a href="#activity">FIX Activity</a>
+  <a href="#compose">Compose a raw message</a>
+  <strong>Templates</strong>
+  <a href="#templates">Message templates</a>
+  <a href="#fieldtypes">Field types</a>
+  <a href="#dynamic">Dynamic values</a>
+  <a href="#mappings">Value mappings</a>
+  <strong>Administration</strong>
+  <a href="#users">Users &amp; roles</a>
+  <a href="#logs">System logs</a>
+  <a href="#data">Where your data lives</a>
+  <strong>Help</strong>
+  <a href="#trouble">Troubleshooting</a>
+  <a href="#licence">Licence &amp; credits</a>
+</nav>
+
+<main>
+
+<header class="title">
+  <h1>FIXulator — User Guide</h1>
+  <p>A FIX protocol initiator simulator for testing and development.</p>
+</header>
+
+<div class="danger">
+  <p><strong>Testing tool — not for production trading.</strong> FIXulator exists to
+  exercise FIX integrations in development and QA. Do not connect it to a live venue
+  and do not use it to send real orders. It is provided <em>as is</em>, without
+  warranty of any kind, and its authors accept no liability for any loss arising
+  from its use.</p>
+</div>
+
+<h2 id="what">What FIXulator is</h2>
+
+<p>FIXulator acts as a FIX <strong>initiator</strong>: it dials out to a counterparty
+(an exchange simulator, a broker's UAT gateway, another test tool) and lets you drive
+that session from a browser. With it you can:</p>
+
+<ul>
+  <li>Configure and connect one or more FIX sessions, and watch their state live.</li>
+  <li>Send New Order Single, amend (cancel/replace), and cancel requests.</li>
+  <li>Compose and send an arbitrary raw FIX message.</li>
+  <li>Follow the full order lifecycle — New, PartFilled, Filled, Cancelled, and the rest.</li>
+  <li>Inspect every inbound and outbound message, decoded tag by tag.</li>
+  <li>Build reusable message templates with auto-generated and derived fields.</li>
+</ul>
+
+<p>It does <em>not</em> match orders or simulate a market. It is the client side of the
+conversation; you supply the other end.</p>
+
+<h2 id="install">Install</h2>
+
+<p>Installers bundle their own Java runtime, so <strong>you do not need a JDK</strong>.
+Download the file for your platform from the project's releases page.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Platform</th><th>File</th><th>Installs to</th></tr></thead>
+  <tbody>
+    <tr><td>Windows</td><td><code>.msi</code></td><td>Per-user; no administrator rights needed</td></tr>
+    <tr><td>Debian / Ubuntu</td><td><code>.deb</code></td><td><code>/opt/fixulator</code></td></tr>
+    <tr><td>Red Hat / Fedora</td><td><code>.rpm</code></td><td><code>/opt/fixulator</code></td></tr>
+    <tr><td>macOS</td><td><code>.dmg</code></td><td><code>/Applications</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Running from the JAR instead</h3>
+
+<p>If you build from source, the fat JAR needs a Java 17 runtime and nothing else:</p>
+
+<pre><code>cd src
+mvn package
+java -jar target/fix-simulator.jar        # port 8080
+java -jar target/fix-simulator.jar 9090   # a different port</code></pre>
+
+<h2 id="first-run">First run &amp; sign in</h2>
+
+<ol class="steps">
+  <li>Launch FIXulator. It starts a local web server and prints the address.</li>
+  <li>Open <code>http://localhost:8080</code> in a browser.</li>
+  <li>Sign in with the account created on first startup:
+      username <code>admin</code>, password <code>admin</code>.</li>
+</ol>
+
+<div class="warn">
+  <p><strong>Change the default password immediately.</strong> The <code>admin</code>/<code>admin</code>
+  account is created only when no users exist yet, purely so you can get in. Anyone who can
+  reach the port can sign in with it. Go to <em>User Management</em> and set a real password
+  before using FIXulator anywhere other than your own machine.</p>
+</div>
+
+<p>FIXulator remembers you for 30 days via a browser cookie, so you normally sign in
+once. <strong>Sign Out</strong> in the top-right clears that immediately.</p>
+
+<h2 id="tour">The interface</h2>
+
+<h3>Top bar</h3>
+<ul>
+  <li><strong>Session switcher</strong> — chooses which FIX session the pages act on.
+      Orders, Trades, and FIX Activity all follow this selection, and it is remembered
+      per user between restarts.</li>
+  <li><strong>Connect / Disconnect</strong> — brings the selected session up or down.</li>
+  <li><strong>Seq Mgmt</strong> — inspect and reset sequence numbers for the session.</li>
+</ul>
+
+<h3>Sidebar</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Section</th><th>Pages</th></tr></thead>
+  <tbody>
+    <tr><td>Overview</td><td>Dashboard</td></tr>
+    <tr><td>Monitoring</td><td>Orders, Trades, FIX Activity</td></tr>
+    <tr><td>Admin</td><td>FIX Connections, FIX Message Templates, Dynamic Values,
+        Value Mappings, User Management, System Logs</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Dashboard</h3>
+<p>Counters for active connections, total orders, filled trades, and messages in the last
+hour; a table of every configured session with its type, status, and TX/RX counts; and the
+most recent messages on the active session. It refreshes on its own.</p>
+
+<h2 id="connections">FIX connections</h2>
+
+<p><em>Admin → FIX Connections.</em> Add, edit, connect, disconnect, and delete sessions.
+Settings persist across restarts, as do sequence numbers.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>Connection type</td><td><code>Initiator</code> dials out; <code>Acceptor</code> listens.</td></tr>
+    <tr><td>FIX version</td><td>Application version, e.g. <code>FIX.4.4</code> or <code>FIX.5.0</code>.</td></tr>
+    <tr><td>Begin string</td><td>Transport version. Same as the FIX version for 4.x;
+        <code>FIXT.1.1</code> for 5.0 and later.</td></tr>
+    <tr><td>SenderCompID</td><td>Your identifier — tag 49 on outbound messages.</td></tr>
+    <tr><td>TargetCompID</td><td>The counterparty's identifier — tag 56.</td></tr>
+    <tr><td>Host / Port</td><td>Where to connect (initiator) or bind (acceptor).</td></tr>
+    <tr><td>Heartbeat (secs)</td><td>Heartbeat interval negotiated at logon.</td></tr>
+    <tr><td>Reset on logon</td><td>Reset sequence numbers to 1 each time the session logs on.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <p>A session sitting in <code>CREATED</code> with <em>connection refused</em> in the logs
+  simply means nothing is listening at the other end yet. Start your counterparty, and
+  FIXulator will retry on its own.</p>
+</div>
+
+<p>Deleting a session archives its QuickFIX/J files rather than destroying them — they are
+renamed with a <code>.deleted.&lt;timestamp&gt;</code> suffix.</p>
+
+<h2 id="orders">Orders</h2>
+
+<p><em>Monitoring → Orders.</em> The order blotter for the active session, with every order
+you have sent and its live status.</p>
+
+<h3>Sending a new order</h3>
+<ol class="steps">
+  <li>Select the session in the top bar and connect it.</li>
+  <li>Click <strong>New Order</strong>.</li>
+  <li>Fill in symbol, side, quantity, price, order type, and time in force.
+      ClOrdID is generated for you.</li>
+  <li>Send. The order appears in the blotter and the message in FIX Activity.</li>
+</ol>
+
+<p>If a template is available for the session, its choices populate the side, order type,
+and time-in-force dropdowns, and any extra fields it defines appear under
+<strong>Additional Fields</strong>. Hovering the action buttons shows which template applied.</p>
+
+<h3>Amending and cancelling</h3>
+<p><strong>Amend</strong> opens a form pre-filled from the order, with a new ClOrdID generated
+and the original shown read-only; it sends an Order Cancel/Replace Request (35=G).
+<strong>Cancel</strong> sends an Order Cancel Request (35=F) immediately for that row.</p>
+
+<h3>Filtering</h3>
+<p>Filter by ClOrdID, symbol, side, order type, time in force, and status
+(New, PartFilled, Filled, DoneForDay, Cancelled, Stopped, Rejected, Suspended, Expired,
+PendCxl, PendReplace, PendingNew). Filters apply as you change them.</p>
+
+<h2 id="trades">Trades</h2>
+
+<p><em>Monitoring → Trades.</em> Execution reports that represent actual fills — partial
+fills, fills, and trades — rather than every acknowledgement. Filter by ExecID, ClOrdID,
+execution type, symbol, and side; 20 rows per page, refreshing automatically.</p>
+
+<h2 id="activity">FIX Activity</h2>
+
+<p><em>Monitoring → FIX Activity.</em> Every message in and out on the active session,
+newest first, plus application events.</p>
+
+<ul>
+  <li><strong>Filters</strong> — direction (all, sent, received) and a <em>hide heartbeats</em>
+      toggle. Your choices survive moving between pages.</li>
+  <li><strong>Detail</strong> — click a row to see every tag with its name and decoded value,
+      alongside the raw message.</li>
+  <li><strong>Create Template from FIX Message</strong> — turns the selected message into a
+      new template and opens it for editing. The quickest way to build one.</li>
+</ul>
+
+<h2 id="compose">Compose a raw message</h2>
+
+<p>Available from Orders, Trades, and FIX Activity via <strong>Compose Message</strong>,
+which slides out from the side.</p>
+
+<ol class="steps">
+  <li>Paste or type a raw FIX message. SOH-delimited and pipe-delimited
+      (<code>tag=value|tag=value</code>) are both accepted.</li>
+  <li><strong>Parse</strong> checks it locally and shows a field-by-field breakdown with tag
+      names and decoded values — nothing is sent.</li>
+  <li><strong>Send</strong> transmits it on the active session.</li>
+</ol>
+
+<div class="note">
+  <p>Session-level tags — <code>8</code>, <code>9</code>, <code>10</code>, <code>34</code>,
+  <code>35</code>, <code>49</code>, <code>52</code>, <code>56</code> — are owned by the FIX
+  engine. If you supply them they are ignored, and correct values are substituted.</p>
+</div>
+
+<h2 id="templates">Message templates</h2>
+
+<p><em>Admin → FIX Message Templates.</em> A template is a reusable message definition:
+fixed values, fields you fill in at send time, values generated automatically, and values
+derived from other fields.</p>
+
+<p>Create one from scratch with <strong>New Template</strong>, or paste a raw message into
+<strong>Create Template from FIX Message</strong> and adjust the field types afterwards.</p>
+
+<p><strong>Scope</strong> decides visibility: a <em>global</em> template is offered on every
+session, a <em>session</em> template only on the one it belongs to.</p>
+
+<h2 id="fieldtypes">Field types</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Type</th><th>What it does</th><th>Use it for</th></tr></thead>
+  <tbody>
+    <tr><td>Literal</td><td>A fixed value, sent as-is.</td><td>Constants such as a fixed account.</td></tr>
+    <tr><td>User input</td><td>Shows a text box on the order form.</td><td>Symbol, quantity, price.</td></tr>
+    <tr><td>Placeholder</td><td>Generated at send time.</td><td>ClOrdID, TransactTime, SendingTime, UUID,
+        the session's sender and target.</td></tr>
+    <tr><td>Derived</td><td>Looks the resolved value of another tag up in a mapping table.</td>
+        <td>SecurityID from Symbol, via a symbol-to-ISIN mapping.</td></tr>
+    <tr><td>Enumeration</td><td>Renders a dropdown.</td><td>Side, order type, time in force.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Enumeration options are written <code>KEY:LABEL</code> — the key goes on the wire, the label
+appears in the UI. <code>1:Buy</code> sends <code>1</code> and displays <em>Buy</em>. A plain
+value with no colon is used for both.</p>
+
+<div class="note">
+  <p>Declaration order does not matter for derived fields. Everything else is resolved first,
+  then derived fields are resolved against those results — so a field may derive from one
+  defined after it.</p>
+</div>
+
+<h2 id="dynamic">Dynamic values</h2>
+
+<p><em>Admin → Dynamic Values.</em> Named tokens you can drop inside a template field's value
+using <code>$(name)</code> syntax — so a field can be part fixed text, part substitution,
+rather than wholly one or the other.</p>
+
+<ul>
+  <li><strong>Built-in tokens</strong> such as <code>$(order_id)</code> and
+      <code>$(timestamp)</code> are generated by the engine each time a message is sent.
+      They cannot be edited or removed.</li>
+  <li><strong>Custom tokens</strong> you define here substitute a fixed string wherever the
+      token appears. Useful for a value repeated across many templates — change it once here
+      and every template follows.</li>
+</ul>
+
+<p>The page lists each token with its description and an example of how to write it.</p>
+
+<h2 id="mappings">Value mappings</h2>
+
+<p><em>Admin → Value Mappings.</em> Named lookup tables of key → value, used by
+<em>derived</em> template fields. The shipped example maps symbols to ISINs, so a template
+can fill SecurityID automatically from whatever Symbol you typed.</p>
+
+<h2 id="users">Users &amp; roles</h2>
+
+<p><em>Admin → User Management.</em> Each user has a username (fixed once created), display
+name, password, email, roles, active flag, a maximum number of concurrent sessions
+(<code>0</code> means unlimited), and a timezone.</p>
+
+<h3>Roles</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Role</th><th>Can do</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Tester</strong></td><td>Orders, trades, FIX activity, templates, dynamic
+        values, value mappings, compose and send messages.</td></tr>
+    <tr><td><strong>Admin</strong></td><td>Everything a Tester can, plus FIX connections,
+        user management, and system logs.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Deactivating a user (clearing <em>active</em>) blocks sign-in without deleting anything.</p>
+
+<h3>Timezone</h3>
+<p>Every timestamp shown to a user — dashboard, FIX Activity, order send times, trade times —
+is rendered in that user's timezone. It defaults to UTC. Two people can watch the same
+session in their own local time.</p>
+
+<h2 id="logs">System logs</h2>
+
+<p><em>Admin → System Logs.</em> A live tail of the application log, with wrap and regex
+filtering, and a <strong>Download Log</strong> button for attaching to a bug report. This is
+the first place to look when a session will not connect.</p>
+
+<h2 id="data">Where your data lives</h2>
+
+<p>An installed FIXulator keeps everything it writes in your user profile, never inside the
+application folder:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Platform</th><th>Location</th></tr></thead>
+  <tbody>
+    <tr><td>Windows</td><td><code>%LOCALAPPDATA%\FIXulator</code></td></tr>
+    <tr><td>macOS</td><td><code>~/Library/Application Support/FIXulator</code></td></tr>
+    <tr><td>Linux</td><td><code>$XDG_DATA_HOME/fixulator</code>, otherwise
+        <code>~/.local/share/fixulator</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Inside it, <code>data/</code> holds users, templates, dynamic values, value mappings,
+saved orders and trades; <code>logs/</code> holds the log files; and
+<code>fix-gateway.cfg</code> holds session configuration.</p>
+
+<p>To put that somewhere else — a server volume, a shared drive — set either:</p>
+
+<pre><code>-Dfixulator.home=/srv/fixulator     # JVM flag
+FIXULATOR_HOME=/srv/fixulator       # environment variable</code></pre>
+
+<p>Running from a source checkout instead uses <code>data/</code> and <code>logs/</code>
+beside the working directory.</p>
+
+<div class="note">
+  <p><strong>Backing up or moving a setup:</strong> copy the whole home directory. It is all
+  plain text — YAML and logs — so it diffs and version-controls cleanly.</p>
+</div>
+
+<h2 id="trouble">Troubleshooting</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Symptom</th><th>What it usually means</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><em>Connection refused</em> repeating in the log</td>
+      <td>Nothing is listening at the configured host and port. Start the counterparty;
+          FIXulator retries automatically.</td>
+    </tr>
+    <tr>
+      <td>The app will not start, or the browser cannot reach it</td>
+      <td>Another process holds port 8080. Start it on a different port:
+          <code>java -jar fix-simulator.jar 9090</code>.</td>
+    </tr>
+    <tr>
+      <td>Logon is rejected by the counterparty</td>
+      <td>SenderCompID / TargetCompID are swapped or misspelled, the begin string does not
+          match what they expect, or sequence numbers are out of step. Try
+          <em>reset on logon</em>, or reset sequence numbers from <strong>Seq Mgmt</strong>.</td>
+    </tr>
+    <tr>
+      <td>Orders and messages are missing</td>
+      <td>The session switcher is on a different session. Pages only show the active one.</td>
+    </tr>
+    <tr>
+      <td>Everyone has forgotten their password</td>
+      <td>Stop FIXulator, delete <code>users.yaml</code> from the data directory, and start
+          again. The default <code>admin</code>/<code>admin</code> account is recreated, since
+          no users exist. Nothing else is affected.</td>
+    </tr>
+    <tr>
+      <td>You want a completely clean slate</td>
+      <td>Stop FIXulator and delete the home directory above. Everything is recreated on the
+          next start.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="licence">Licence &amp; credits</h2>
+
+<p>FIXulator is licensed under the <strong>Apache License 2.0</strong> — free to use, modify,
+and distribute, for personal and commercial purposes alike, including inside closed-source
+products. Keep the licence and copyright notice, state significant changes, and do not use
+the authors' names to endorse your derivative. The licence disclaims all warranties and
+limits the authors' liability.</p>
+
+<p>Created by <strong>Niwat Panrit</strong>. Built with <strong>Claude</strong> (Anthropic).</p>
+
+<footer>
+  <p>FIXulator is a testing tool and is not intended for production trading.
+  See the <code>LICENSE</code> and <code>NOTICE</code> files in the repository for the
+  binding terms and third-party component licences.</p>
+</footer>
+
+</main>
+</div>
+</body>
+</html>

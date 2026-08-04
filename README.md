@@ -31,6 +31,14 @@ application — see [packaging/README.md](packaging/README.md) for the exact
 locations and how to override them. To build the installers yourself, see the
 same document.
 
+## Documentation
+
+| Document | For |
+|---|---|
+| [User Guide](docs/index.html) | Using the app — install, connect a session, send orders, build templates, manage users |
+| [Application Specification](src/APPLICATION_SPEC.md) | Developers — architecture, plugin layout, design decisions |
+| [Packaging](packaging/README.md) | Building the native installers |
+
 ## Prerequisites (development, on the host machine)
 
 | Tool | Notes |
