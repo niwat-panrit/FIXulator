@@ -137,7 +137,7 @@
 
 <header class="title">
   <h1>FIXulator — User Guide</h1>
-  <p>A FIX protocol initiator simulator for testing and development.</p>
+  <p>A FIX protocol simulator — initiator and acceptor — for testing and development.</p>
 </header>
 
 <div class="danger">
@@ -150,9 +150,10 @@
 
 <h2 id="what">What FIXulator is</h2>
 
-<p>FIXulator acts as a FIX <strong>initiator</strong>: it dials out to a counterparty
-(an exchange simulator, a broker's UAT gateway, another test tool) and lets you drive
-that session from a browser. With it you can:</p>
+<p>FIXulator drives FIX sessions from a browser. It works as an <strong>initiator</strong>,
+dialling out to a counterparty (an exchange simulator, a broker's UAT gateway, another test
+tool), or as an <strong>acceptor</strong>, listening on a port for a counterparty to connect
+to you. With it you can:</p>
 
 <ul>
   <li>Configure and connect one or more FIX sessions, and watch their state live.</li>
@@ -163,7 +164,7 @@ that session from a browser. With it you can:</p>
   <li>Build reusable message templates with auto-generated and derived fields.</li>
 </ul>
 
-<p>It does <em>not</em> match orders or simulate a market. It is the client side of the
+<p>It does <em>not</em> match orders or simulate a market. It handles one side of the
 conversation; you supply the other end.</p>
 
 <h2 id="install">Install</h2>
@@ -267,6 +268,23 @@ Settings persist across restarts, as do sequence numbers.</p>
   simply means nothing is listening at the other end yet. Start your counterparty, and
   FIXulator will retry on its own.</p>
 </div>
+
+<h3>Acceptor sessions</h3>
+
+<p>An acceptor waits for the counterparty to connect to <em>you</em>. Choose
+<code>Acceptor</code> as the connection type and set the port to listen on; the host field
+is not used, since an acceptor binds all interfaces.</p>
+
+<ul>
+  <li>The port is bound as soon as the session starts, but the session stays inactive until
+      you press <strong>Connect</strong> — exactly as an initiator does not dial until you
+      tell it to. A counterparty that connects beforehand is refused.</li>
+  <li>Point your counterparty at this machine's address and that port, with its
+      TargetCompID matching your SenderCompID and vice versa.</li>
+  <li><strong>Two acceptor sessions cannot share a port.</strong> Give each its own. If a
+      port is already taken, that session is skipped at startup and the reason is written to
+      the system log — the rest of the app still runs, so you can correct the port.</li>
+</ul>
 
 <p>Deleting a session archives its QuickFIX/J files rather than destroying them — they are
 renamed with a <code>.deleted.&lt;timestamp&gt;</code> suffix.</p>

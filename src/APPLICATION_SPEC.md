@@ -11,9 +11,11 @@
 ## 1. What is FIXulator?
 
 FIXulator is an embedded-Jetty web application that acts as a **FIX protocol
-initiator simulator**.  It lets QA engineers and developers:
+simulator**, running sessions as an initiator (dialling out) or an acceptor
+(listening).  It lets QA engineers and developers:
 
-- Manage one or more FIX sessions (connect, disconnect, configure).
+- Manage one or more FIX sessions (connect, disconnect, configure), as initiator
+  or acceptor.
 - Send New Order Single, Amend, and Cancel messages through templates or raw
   compose.
 - Monitor inbound/outbound messages in real-time.
@@ -32,7 +34,7 @@ initiator simulator**.  It lets QA engineers and developers:
 | Build | Maven (fat JAR via Maven Shade plugin) |
 | HTTP server | Embedded Jetty (started by `Main.java`) |
 | Web framework | Apache Wicket 10.3.0 (server-side component model) |
-| FIX engine | QuickFIX/J 2.3.1 (initiator mode) |
+| FIX engine | QuickFIX/J 2.3.1 (initiator and acceptor) |
 | Serialisation | Jackson + jackson-dataformat-yaml |
 | Password hashing | jBCrypt |
 | CSS/JS | Bootstrap 5.3.3 + Bootstrap Icons 1.11.3 (CDN) |
@@ -195,9 +197,36 @@ user may write to.
 
 ## 5. FIX Session Configuration
 
-Stored in `fix-gateway.cfg` in the working directory (or on the classpath as a
-fallback).  Managed through the Connection Management page.  Uses QuickFIX/J
+Stored in `fix-gateway.cfg` in the app home (or on the classpath as a fallback).
+Managed through the Connection Management page.  Uses QuickFIX/J
 `FileStoreFactory` so sequence numbers survive restarts.
+
+### Initiator and acceptor sessions
+
+Each session gets its own **`Connector`**, chosen by its `ConnectionType`:
+`SocketAcceptor` for `acceptor`, `SocketInitiator` for everything else.
+`DefaultFixGatewayPlugin.isAcceptor` makes that call.
+
+> **The connector type must match the session's `ConnectionType`.** Handing an
+> acceptor session to a `SocketInitiator` does **not** throw — it creates no
+> session, never fires `onCreate`, and so the session never reaches `sessionIDs`
+> and disappears from the UI while its config sits correctly in the `.cfg` file.
+> That was a real bug; `ConnectorSelection` in `DefaultFixGatewayPluginTest`
+> pins the behaviour down.
+
+Sessions are created by `Connector.start()`, not by the constructor — for an
+acceptor that happens as it binds its port. `startSessionConnector` therefore
+starts the connector *before* looking the session up to log it out.
+
+**Acceptor lifecycle:** the connector binds its port as soon as the session
+starts, while the session itself stays logged out until the user presses
+Connect — mirroring an initiator, whose connector runs without dialling.
+Connect (`Session.logon()`) is what lets an inbound logon succeed. Two acceptor
+sessions cannot share a port, since each owns a separate connector.
+
+A session that fails to start — an acceptor whose port is taken, most likely —
+is logged and skipped rather than aborting startup, so the UI stays available
+to fix the configuration.
 
 ---
 

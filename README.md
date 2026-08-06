@@ -1,7 +1,7 @@
 # FIXulator
 
-> A FIX protocol initiator simulator — connect sessions, send orders, and watch
-> the message flow, without a counterparty exchange.
+> A FIX protocol simulator — run initiator or acceptor sessions, send orders, and
+> watch the message flow, without a production venue.
 
 ## ⚠️ Disclaimer — testing tool, not for production trading
 

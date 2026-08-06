@@ -46,9 +46,15 @@ import com.npsoftdev.fixsimulator.core.plugin.SimulatorPlugin;
  *       add / update / delete so that changes survive application restarts.</li>
  * </ul>
  *
- * <p>Each FIX session is managed by its own dedicated {@link SocketInitiator}.
- * This means adding, editing, or deleting one session has zero impact on any
- * other session — no shared restart, no dropped connections.</p>
+ * <p>Each FIX session is managed by its own dedicated {@link Connector} — a
+ * {@link SocketInitiator} when the session dials out, a {@link SocketAcceptor}
+ * when it listens. This means adding, editing, or deleting one session has zero
+ * impact on any other session — no shared restart, no dropped connections.</p>
+ *
+ * <p><strong>Acceptor sessions bind their port as soon as they start</strong>,
+ * while the session itself stays logged out until the user presses Connect —
+ * mirroring how an initiator's connector runs without dialling. Two acceptor
+ * sessions therefore cannot share a port.</p>
  */
 public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
@@ -77,11 +83,12 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     private transient String configFilePath;
 
     /**
-     * One dedicated {@link Initiator} per session ID.  Editing session X stops
-     * and replaces only X's initiator — all other initiators keep running.
-     * Transient: Initiator is not serializable.
+     * One dedicated {@link Connector} per session ID — a {@link SocketInitiator}
+     * or a {@link SocketAcceptor} depending on the session's ConnectionType.
+     * Editing session X stops and replaces only X's connector; all others keep
+     * running. Transient: Connector is not serializable.
      */
-    private transient Map<String, Initiator> sessionInitiators;
+    private transient Map<String, Connector> sessionConnectors;
 
     /**
      * Shared session-ID registry populated from {@link #onCreate} callbacks.
@@ -151,18 +158,22 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     public void initialize(FixSimulatorApplication app) {
         if (settings == null) return;   // nav-only — nothing to start
 
-        sessionInitiators = new ConcurrentHashMap<>();
+        sessionConnectors = new ConcurrentHashMap<>();
 
-        // Start one dedicated initiator per configured session.
+        // Start one dedicated connector per configured session.
         List<SessionID> sids = new ArrayList<>();
         Iterator<SessionID> it = settings.sectionIterator();
         while (it.hasNext()) sids.add(it.next());
 
         for (SessionID sid : sids) {
             try {
-                startSessionInitiator(sid, buildPerSessionSettings(sid));
-            } catch (ConfigError e) {
-                throw new RuntimeException("FIX initiator failed to start for session: " + sid, e);
+                startSessionConnector(sid, buildPerSessionSettings(sid));
+            } catch (Exception e) {
+                // One bad session must not stop the application from starting.
+                // An acceptor whose port is already taken is the likely cause,
+                // and the user needs the UI up in order to fix the port.
+                log.error("FIX session failed to start and will be unavailable: {} — {}",
+                        sid, e.getMessage(), e);
             }
         }
 
@@ -269,11 +280,13 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             throw new RuntimeException("Failed to configure FIX session: " + sid, e);
         }
 
-        // Start a dedicated initiator for this session only.
+        // Start a dedicated connector for this session only.
         try {
-            startSessionInitiator(sid, buildPerSessionSettings(req));
-        } catch (ConfigError e) {
-            throw new RuntimeException("Failed to start FIX initiator for session: " + sid, e);
+            startSessionConnector(sid, buildPerSessionSettings(req));
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to start FIX " + req.connectionType().toLowerCase()
+                    + " for session " + sid + ": " + e.getMessage(), e);
         }
 
         persistSettings();
@@ -291,8 +304,8 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
 
         log.info("Updating FIX session: {} → {}:{} {}→{}",
                 oldSessionId, req.senderCompID(), req.targetCompID(), req.host(), req.port());
-        // Stop only the initiator for the old session — others are untouched.
-        Initiator old = sessionInitiators.remove(oldSessionId);
+        // Stop only the connector for the old session — others are untouched.
+        Connector old = sessionConnectors.remove(oldSessionId);
         if (old != null) old.stop(true);
 
         // Remove old session from master settings.
@@ -313,11 +326,13 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             throw new RuntimeException("Failed to configure updated FIX session: " + newSid, e);
         }
 
-        // Start a dedicated initiator for the new session configuration.
+        // Start a dedicated connector for the new session configuration.
         try {
-            startSessionInitiator(newSid, buildPerSessionSettings(req));
-        } catch (ConfigError e) {
-            throw new RuntimeException("Failed to start FIX initiator for session: " + newSid, e);
+            startSessionConnector(newSid, buildPerSessionSettings(req));
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to start FIX " + req.connectionType().toLowerCase()
+                    + " for session " + newSid + ": " + e.getMessage(), e);
         }
 
         persistSettings();
@@ -332,11 +347,11 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     private synchronized void deleteSessionInternal(String sessionId) {
 
         log.info("Deleting FIX session: {}", sessionId);
-        // Stop only this session's initiator — others are untouched.
-        Initiator init = sessionInitiators.remove(sessionId);
-        if (init != null) {
+        // Stop only this session's connector — others are untouched.
+        Connector connector = sessionConnectors.remove(sessionId);
+        if (connector != null) {
             archiveSessionFiles(sessionId, settings);
-            init.stop(true);
+            connector.stop(true);
         }
 
         // Remove from master settings.
@@ -355,34 +370,67 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     // ── Per-session initiator helper ──────────────────────────────────────────
 
     /**
-     * Creates, starts, and registers a dedicated {@link SocketInitiator} for the
-     * given session.  The session is left in the logged-out state so that the user
-     * explicitly initiates the first connection via the UI Connect button.
+     * Creates, starts, and registers a dedicated {@link Connector} for the given
+     * session: a {@link SocketAcceptor} when its ConnectionType is
+     * {@code acceptor}, otherwise a {@link SocketInitiator}.  The session is left
+     * in the logged-out state so that the user explicitly enables it via the UI
+     * Connect button.
      *
-     * <p>Because {@link SocketInitiator#start()} calls {@link Application#onCreate}
-     * synchronously (via the {@link Session} constructor), the session is already
-     * present in QFJ's static registry and in {@link #sessionIDs} by the time this
-     * method returns.  We can therefore safely call {@link Session#logout()} to
-     * suppress auto-connect before the initiator's background threads fire.</p>
+     * <p><strong>The connector type must match the session's ConnectionType.</strong>
+     * A {@code SocketInitiator} handed an acceptor session does not fail — it
+     * silently creates no session at all, so {@link Application#onCreate} never
+     * fires, the session never reaches {@link #sessionIDs}, and it disappears from
+     * the UI while its configuration sits correctly in {@code fix-gateway.cfg}.</p>
+     *
+     * <p>{@link Connector#start()} is what creates the session and calls
+     * {@link Application#onCreate} — for an acceptor this happens as it binds its
+     * port. The lookup below must therefore come after {@code start()}; by that
+     * point the session is in QFJ's registry and in {@link #sessionIDs}, so
+     * {@link Session#logout()} can suppress it before the connector's background
+     * threads fire.</p>
      */
-    private void startSessionInitiator(SessionID sid, SessionSettings perSessionSettings)
+    private void startSessionConnector(SessionID sid, SessionSettings perSessionSettings)
             throws ConfigError {
 
-        log.info("Starting FIX initiator for session: {}", sid);
-        Initiator init = new SocketInitiator(
-                this,
-                new FileStoreFactory(perSessionSettings),
-                perSessionSettings,
-                new SLF4JLogFactory(perSessionSettings),
-                new DefaultMessageFactory());
+        boolean acceptor = isAcceptor(perSessionSettings, sid);
+        log.info("Starting FIX {} for session: {}", acceptor ? "acceptor" : "initiator", sid);
 
-        init.start();
+        Connector connector = acceptor
+                ? new SocketAcceptor(
+                        this,
+                        new FileStoreFactory(perSessionSettings),
+                        perSessionSettings,
+                        new SLF4JLogFactory(perSessionSettings),
+                        new DefaultMessageFactory())
+                : new SocketInitiator(
+                        this,
+                        new FileStoreFactory(perSessionSettings),
+                        perSessionSettings,
+                        new SLF4JLogFactory(perSessionSettings),
+                        new DefaultMessageFactory());
 
-        // Prevent the initiator from auto-connecting — the user decides when to connect.
+        connector.start();
+
+        // The user decides when the session goes live: an initiator must not
+        // auto-dial, and an acceptor must not accept a logon yet.
         Session qfSession = Session.lookupSession(sid);
         if (qfSession != null) qfSession.logout();
 
-        sessionInitiators.put(sid.toString(), init);
+        sessionConnectors.put(sid.toString(), connector);
+    }
+
+    /**
+     * Whether the given session is configured as an acceptor. Defaults to
+     * {@code false} (initiator) when the setting is absent or unreadable.
+     * Package-private for testing.
+     */
+    static boolean isAcceptor(SessionSettings settings, SessionID sid) {
+        try {
+            return SessionFactory.ACCEPTOR_CONNECTION_TYPE
+                    .equalsIgnoreCase(settings.getString(sid, SessionFactory.SETTING_CONNECTION_TYPE));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ── Per-session settings builders ─────────────────────────────────────────

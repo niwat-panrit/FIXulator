@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import com.npsoftdev.fixsimulator.core.plugin.NavSection;
@@ -252,6 +253,109 @@ class DefaultFixGatewayPluginTest {
     /**
      * Returns the first (and typically only) session ID from a {@link SessionSettings}.
      */
+    /**
+     * An acceptor session must be driven by a {@link quickfix.SocketAcceptor}, not a
+     * {@link quickfix.SocketInitiator}.
+     *
+     * <p>These pin down the bug where every session got a SocketInitiator regardless
+     * of its ConnectionType. That failed <em>silently</em>: the initiator constructed
+     * without complaint, created no session, never fired {@code onCreate}, and so the
+     * acceptor vanished from the connection list while its config sat correctly in
+     * {@code fix-gateway.cfg}.</p>
+     */
+    @Nested
+    class ConnectorSelection {
+
+        private SessionSettings acceptorSettings() throws ConfigError {
+            return DefaultFixGatewayPlugin.buildPerSessionSettings(new NewSessionRequest(
+                    "Acceptor", "FIX.4.4", "FIX.4.4", "SIMULATOR", "CLIENT",
+                    "0.0.0.0", freePort(), 30, false));
+        }
+
+        /** A port the OS is not currently using, so the acceptor can actually bind. */
+        private int freePort() {
+            try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+                return socket.getLocalPort();
+            } catch (IOException e) {
+                throw new IllegalStateException("could not reserve a free port", e);
+            }
+        }
+
+        private SessionSettings initiatorSettings() throws ConfigError {
+            return DefaultFixGatewayPlugin.buildPerSessionSettings(new NewSessionRequest(
+                    "Initiator", "FIX.4.4", "FIX.4.4", "SIMULATOR", "EXCHANGE",
+                    "localhost", 9876, 30, false));
+        }
+
+        @Test
+        void acceptorSession_isDetectedAsAcceptor() throws ConfigError {
+            SessionSettings s = acceptorSettings();
+            assertTrue(DefaultFixGatewayPlugin.isAcceptor(s, sessionId(s)));
+        }
+
+        @Test
+        void initiatorSession_isNotDetectedAsAcceptor() throws ConfigError {
+            SessionSettings s = initiatorSettings();
+            assertFalse(DefaultFixGatewayPlugin.isAcceptor(s, sessionId(s)));
+        }
+
+        @Test
+        void missingConnectionType_defaultsToInitiator() throws Exception {
+            SessionSettings s = new SessionSettings(new ByteArrayInputStream((
+                    "[DEFAULT]\nStartTime=00:00:00\nEndTime=00:00:00\n\n"
+                  + "[SESSION]\nBeginString=FIX.4.4\n"
+                  + "SenderCompID=A\nTargetCompID=B\n")
+                    .getBytes(StandardCharsets.UTF_8)));
+            assertFalse(DefaultFixGatewayPlugin.isAcceptor(s, sessionId(s)),
+                    "an unreadable ConnectionType must not silently produce an acceptor");
+        }
+
+        @Test
+        void socketInitiator_silentlyCreatesNoSessionForAnAcceptor() throws Exception {
+            SessionSettings s = acceptorSettings();
+            RecordingApplication app = new RecordingApplication();
+
+            quickfix.Initiator wrong = new quickfix.SocketInitiator(
+                    app, new quickfix.MemoryStoreFactory(), s, new quickfix.DefaultMessageFactory());
+            try {
+                wrong.start();   // even started, it adopts nothing
+                assertTrue(wrong.getSessions().isEmpty(),
+                        "this is the trap: the wrong connector type does not throw, it just does nothing");
+                assertTrue(app.created.isEmpty(),
+                        "onCreate never fires, which is why the session vanished from the UI list");
+            } finally {
+                wrong.stop(true);
+            }
+        }
+
+        @Test
+        void socketAcceptor_createsTheSessionAndFiresOnCreate() throws Exception {
+            SessionSettings s = acceptorSettings();
+            SessionID expected = sessionId(s);
+            RecordingApplication app = new RecordingApplication();
+
+            quickfix.Acceptor acceptor = new quickfix.SocketAcceptor(
+                    app, new quickfix.MemoryStoreFactory(), s, new quickfix.DefaultMessageFactory());
+            try {
+                // An acceptor creates its sessions when it starts and binds, not in
+                // the constructor — which is why startSessionConnector() must start
+                // the connector before looking the session up.
+                acceptor.start();
+                assertEquals(List.of(expected), acceptor.getSessions());
+                assertTrue(app.created.contains(expected),
+                        "onCreate must fire so the session reaches the connection list");
+            } finally {
+                acceptor.stop(true);
+            }
+        }
+    }
+
+    /** Records onCreate callbacks; every other callback is a no-op. */
+    private static class RecordingApplication extends quickfix.ApplicationAdapter {
+        final List<SessionID> created = new java.util.ArrayList<>();
+        @Override public void onCreate(SessionID sessionId) { created.add(sessionId); }
+    }
+
     private static SessionID sessionId(SessionSettings s) {
         return s.sectionIterator().next();
     }
