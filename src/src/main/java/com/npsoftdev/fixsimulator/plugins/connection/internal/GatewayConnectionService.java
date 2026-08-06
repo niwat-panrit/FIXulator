@@ -87,6 +87,12 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     private final Consumer<String> sessionDeleter;
 
     /**
+     * Starts a session's connector if it is not running. Lets Listen retry an
+     * acceptor whose port was busy when it was first configured.
+     */
+    private final Consumer<String> connectorStarter;
+
+    /**
      * Tracks which sessions the user has explicitly connected (via the Connect button).
      * Each session has its own dedicated initiator, so this is purely informational.
      */
@@ -101,7 +107,8 @@ public class GatewayConnectionService implements ConnectionService, Serializable
         this(sessionIDs, session, settings,
                 req -> { throw new UnsupportedOperationException("addSession not wired"); },
                 (sid, req) -> { throw new UnsupportedOperationException("updateSession not wired"); },
-                sid -> { throw new UnsupportedOperationException("deleteSession not wired"); });
+                sid -> { throw new UnsupportedOperationException("deleteSession not wired"); },
+                sid -> { /* no connector to start in tests */ });
     }
 
     public GatewayConnectionService(Map<String, SessionID> sessionIDs,
@@ -109,13 +116,15 @@ public class GatewayConnectionService implements ConnectionService, Serializable
                                     SessionSettings settings,
                                     Consumer<NewSessionRequest> sessionAdder,
                                     BiConsumer<String, NewSessionRequest> sessionUpdater,
-                                    Consumer<String> sessionDeleter) {
+                                    Consumer<String> sessionDeleter,
+                                    Consumer<String> connectorStarter) {
         this.sessionIDs     = sessionIDs;
         this.session        = session;
         this.settings       = settings;
         this.sessionAdder   = sessionAdder;
         this.sessionUpdater = sessionUpdater;
         this.sessionDeleter = sessionDeleter;
+        this.connectorStarter = connectorStarter;
     }
 
     // ── Callbacks from DefaultFixGatewayPlugin ────────────────────────────────
@@ -198,6 +207,10 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     @Override
     public void connect(String sessionId) {
         log.info("User-initiated CONNECT for session: {}", sessionId);
+        // An acceptor whose port was busy has configuration but no connector, so
+        // bind first. Throws SessionStartException if the port is still taken —
+        // the caller shows that to the user rather than silently doing nothing.
+        connectorStarter.accept(sessionId);
         enabledSessions.add(sessionId);
         resolve(sessionId).ifPresent(session::logon);
     }

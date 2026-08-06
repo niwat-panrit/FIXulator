@@ -142,6 +142,12 @@
 
     <!-- ── Content Area ────────────────────────────────── -->
     <main class="content-area">
+        <!-- App-wide feedback. Errors raised by any page (e.g. an acceptor whose
+             port is in use) surface here instead of an internal error page. -->
+        <div wicket:id="pageFeedbackArea">
+            <ul wicket:id="pageFeedback" class="feedbackPanel"
+                style="list-style:none;padding:0;margin:0 0 .75rem;"></ul>
+        </div>
         <wicket:child/>
     </main>
 

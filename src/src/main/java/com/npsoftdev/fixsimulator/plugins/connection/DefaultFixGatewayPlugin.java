@@ -7,6 +7,7 @@ import com.npsoftdev.fixsimulator.plugins.connection.internal.GatewayMessageLogS
 import com.npsoftdev.fixsimulator.plugins.connection.internal.LiveSessionFacade;
 import com.npsoftdev.fixsimulator.core.ui.BasePage;
 import com.npsoftdev.fixsimulator.plugins.connection.api.MessageLogService;
+import com.npsoftdev.fixsimulator.plugins.connection.api.SessionStartException;
 import quickfix.*;
 import quickfix.Dictionary;
 import quickfix.field.MsgType;
@@ -141,7 +142,8 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
                     sessionIDs, facade, settings,
                     (Serializable & Consumer<com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.NewSessionRequest>) this::addSessionInternal,
                     (Serializable & BiConsumer<String, com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.NewSessionRequest>) this::updateSessionInternal,
-                    (Serializable & Consumer<String>) this::deleteSessionInternal);
+                    (Serializable & Consumer<String>) this::deleteSessionInternal,
+                    (Serializable & Consumer<String>) this::startConnectorIfStopped);
             messageLogService = new GatewayMessageLogService();
         }
     }
@@ -280,16 +282,13 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             throw new RuntimeException("Failed to configure FIX session: " + sid, e);
         }
 
-        // Start a dedicated connector for this session only.
-        try {
-            startSessionConnector(sid, buildPerSessionSettings(req));
-        } catch (Exception e) {
-            throw new RuntimeException(
-                    "Failed to start FIX " + req.connectionType().toLowerCase()
-                    + " for session " + sid + ": " + e.getMessage(), e);
-        }
-
+        // Persist BEFORE starting. A start can fail for a reason the user can fix
+        // later — an acceptor port already in use, most often — and losing the
+        // configuration would force them to type it all in again to retry.
         persistSettings();
+
+        // Start a dedicated connector for this session only.
+        startConfiguredSession(sid, req);
     }
 
     /**
@@ -326,16 +325,13 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
             throw new RuntimeException("Failed to configure updated FIX session: " + newSid, e);
         }
 
-        // Start a dedicated connector for the new session configuration.
-        try {
-            startSessionConnector(newSid, buildPerSessionSettings(req));
-        } catch (Exception e) {
-            throw new RuntimeException(
-                    "Failed to start FIX " + req.connectionType().toLowerCase()
-                    + " for session " + newSid + ": " + e.getMessage(), e);
-        }
-
+        // Persist before starting, for the same reason as addSessionInternal. The
+        // old connector was already stopped above, so editing an acceptor onto a
+        // free port releases the old one and binds the new one.
         persistSettings();
+
+        // Start a dedicated connector for the new session configuration.
+        startConfiguredSession(newSid, req);
     }
 
     /**
@@ -409,7 +405,15 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
                         new SLF4JLogFactory(perSessionSettings),
                         new DefaultMessageFactory());
 
-        connector.start();
+        try {
+            connector.start();
+        } catch (Exception e) {
+            // Release whatever the connector did manage to allocate; leaving a
+            // half-started acceptor behind would hold threads and could keep a
+            // partially bound port from being retried.
+            try { connector.stop(true); } catch (Exception ignored) { }
+            throw startFailure(sid, perSessionSettings, acceptor, e);
+        }
 
         // The user decides when the session goes live: an initiator must not
         // auto-dial, and an acceptor must not accept a logon yet.
@@ -417,6 +421,90 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
         if (qfSession != null) qfSession.logout();
 
         sessionConnectors.put(sid.toString(), connector);
+    }
+
+    /**
+     * Starts the connector for a freshly configured session, reporting any failure
+     * as a {@link SessionStartException} so the UI can show it. The configuration
+     * has already been persisted by the caller and is deliberately left in place:
+     * a busy port is fixable, and the user should be able to retry rather than
+     * retype the session.
+     */
+    private void startConfiguredSession(
+            SessionID sid,
+            com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.NewSessionRequest req) {
+        try {
+            startSessionConnector(sid, buildPerSessionSettings(req));
+        } catch (SessionStartException e) {
+            throw e;
+        } catch (ConfigError e) {
+            throw new SessionStartException(
+                    "FIX session " + sid + " was saved but its configuration was rejected: "
+                    + e.getMessage(), false, e);
+        }
+    }
+
+    /**
+     * Translates a connector start failure into a {@link SessionStartException}
+     * carrying a message worth showing a user.
+     */
+    private SessionStartException startFailure(SessionID sid, SessionSettings perSessionSettings,
+                                               boolean acceptor, Exception cause) {
+        if (SessionStartException.isAddressInUse(cause)) {
+            String port = safeGetStr(perSessionSettings, sid,
+                    acceptor ? "SocketAcceptPort" : "SocketConnectPort", "?");
+            return new SessionStartException(
+                    "Port " + port + " is already in use. Another application, or another "
+                    + "acceptor session in FIXulator, is listening on it. Free the port and "
+                    + "press Listen to retry, or edit this session to use a different port.",
+                    true, cause);
+        }
+        return new SessionStartException(
+                "FIX session " + sid + " could not be started: " + cause.getMessage(),
+                false, cause);
+    }
+
+    /**
+     * Stops every running connector, releasing any bound acceptor ports.
+     * Used by tests and available for an orderly shutdown.
+     */
+    public synchronized void stopAllConnectors() {
+        if (sessionConnectors == null) return;
+        for (Connector c : sessionConnectors.values()) {
+            try { c.stop(true); } catch (Exception e) { log.debug("Connector stop failed", e); }
+        }
+        sessionConnectors.clear();
+    }
+
+    /**
+     * Starts this session's connector if it is not already running, and reports a
+     * failure the caller can show to a user.
+     *
+     * <p>This is what makes a failed acceptor retryable. A session whose port was
+     * taken has configuration but no connector, so pressing Listen comes back
+     * through here and tries to bind again — succeeding once the port is free.</p>
+     */
+    public synchronized void startConnectorIfStopped(String sessionId) {
+        if (settings == null) return;
+        if (sessionConnectors == null) sessionConnectors = new ConcurrentHashMap<>();
+        if (sessionConnectors.containsKey(sessionId)) return;   // already running
+
+        Iterator<SessionID> it = settings.sectionIterator();
+        while (it.hasNext()) {
+            SessionID sid = it.next();
+            if (sid.toString().equals(sessionId)) {
+                try {
+                    startSessionConnector(sid, buildPerSessionSettings(sid));
+                } catch (SessionStartException e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new SessionStartException(
+                            "FIX session " + sid + " could not be started: " + e.getMessage(),
+                            false, e);
+                }
+                return;
+            }
+        }
     }
 
     /**
@@ -469,7 +557,11 @@ public class DefaultFixGatewayPlugin implements SimulatorPlugin, Application {
     }
 
     private String safeGetStr(SessionID sid, String key, String fallback) {
-        try { return settings.getString(sid, key); } catch (Exception e) { return fallback; }
+        return safeGetStr(settings, sid, key, fallback);
+    }
+
+    private static String safeGetStr(SessionSettings from, SessionID sid, String key, String fallback) {
+        try { return from.getString(sid, key); } catch (Exception e) { return fallback; }
     }
 
     private static String fromApplVerID(String applVerID) {

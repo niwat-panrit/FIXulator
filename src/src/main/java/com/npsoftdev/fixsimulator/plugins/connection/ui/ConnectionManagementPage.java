@@ -5,6 +5,7 @@ import com.npsoftdev.fixsimulator.core.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.NewSessionRequest;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.SessionDetails;
+import com.npsoftdev.fixsimulator.plugins.connection.api.SessionStartException;
 import org.apache.wicket.Application;
 import org.apache.wicket.AttributeModifier;
 import org.slf4j.Logger;
@@ -143,7 +144,14 @@ public class ConnectionManagementPage extends BasePage {
                         log.info("User '{}' clicked {} for session: {}",
                                 currentUser(), isAcceptor ? "Listen" : "Connect", s.sessionId());
                         ConnectionService cs = connSvc();
-                        if (cs != null) cs.connect(s.sessionId());
+                        try {
+                            if (cs != null) cs.connect(s.sessionId());
+                        } catch (SessionStartException e) {
+                            // Retrying a busy port is expected to fail until it is
+                            // free; report it and leave the session configured.
+                            log.warn("Could not start session {}: {}", s.sessionId(), e.getMessage());
+                            error(e.getMessage());
+                        }
                     }
                     @Override
                     protected void onConfigure() {
@@ -272,18 +280,27 @@ public class ConnectionManagementPage extends BasePage {
                             model.heartbeatSecs,
                             model.resetOnLogon
                     );
-                    if (model.editingSessionId != null) {
-                        log.info("User '{}' updated session: {} → {}→{} {}:{}",
-                                currentUser(), model.editingSessionId,
-                                req.senderCompID(), req.targetCompID(),
-                                req.host(), req.port());
-                        cs.updateSession(model.editingSessionId, req);
-                    } else {
-                        log.info("User '{}' added session: {}→{} {}:{} hb={}s",
-                                currentUser(),
-                                req.senderCompID(), req.targetCompID(),
-                                req.host(), req.port(), req.heartbeatSecs());
-                        cs.addSession(req);
+                    try {
+                        if (model.editingSessionId != null) {
+                            log.info("User '{}' updated session: {} → {}→{} {}:{}",
+                                    currentUser(), model.editingSessionId,
+                                    req.senderCompID(), req.targetCompID(),
+                                    req.host(), req.port());
+                            cs.updateSession(model.editingSessionId, req);
+                        } else {
+                            log.info("User '{}' added session: {}→{} {}:{} hb={}s",
+                                    currentUser(),
+                                    req.senderCompID(), req.targetCompID(),
+                                    req.host(), req.port(), req.heartbeatSecs());
+                            cs.addSession(req);
+                        }
+                    } catch (SessionStartException e) {
+                        // The session was saved; only the start failed, and the
+                        // usual reason is a port the user can free or change. Show
+                        // it rather than letting Wicket render an internal error.
+                        log.warn("Session saved but did not start: {}", e.getMessage());
+                        error(e.getMessage());
+                        target.add(getFeedbackArea());
                     }
                     model.resetToDefaults();
                     target.add(modalTitle);

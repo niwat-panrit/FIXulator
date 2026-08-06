@@ -6,6 +6,7 @@ import com.npsoftdev.fixsimulator.core.plugin.NavSection;
 import com.npsoftdev.fixsimulator.core.plugin.PluginRegistry;
 import com.npsoftdev.fixsimulator.core.plugin.SimulatorPlugin;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService;
+import com.npsoftdev.fixsimulator.plugins.connection.api.SessionStartException;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.SessionDetails;
 import com.npsoftdev.fixsimulator.plugins.user.api.AuthService;
 import com.npsoftdev.fixsimulator.plugins.user.api.Permission;
@@ -29,6 +30,7 @@ import org.apache.wicket.markup.head.JavaScriptUrlReferenceHeaderItem;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.WebPage;
 import org.apache.wicket.markup.html.basic.Label;
+import org.apache.wicket.markup.html.panel.FeedbackPanel;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.form.NumberTextField;
 import org.apache.wicket.markup.html.link.BookmarkablePageLink;
@@ -50,6 +52,9 @@ import java.util.List;
 import com.npsoftdev.fixsimulator.plugins.user.ui.LoginPage;
 
 public abstract class BasePage extends WebPage {
+
+    /** Shared feedback area rendered above every page's content. */
+    private WebMarkupContainer feedbackArea;
 
     private static final Logger log = LoggerFactory.getLogger(BasePage.class);
 
@@ -164,7 +169,13 @@ public abstract class BasePage extends WebPage {
             public void onClick(AjaxRequestTarget target) {
                 String sid = activeId();
                 ConnectionService cs = connSvc();
-                if (sid != null && cs != null) cs.connect(sid);
+                try {
+                    if (sid != null && cs != null) cs.connect(sid);
+                } catch (SessionStartException e) {
+                    // A busy acceptor port is the user's to fix, not an app fault.
+                    error(e.getMessage());
+                    target.add(getFeedbackArea());
+                }
                 target.add(connStatusArea);
             }
 
@@ -293,11 +304,25 @@ public abstract class BasePage extends WebPage {
             }
         });
 
+        // ── App-wide feedback area ─────────────────────────────────────────────
+        feedbackArea = new WebMarkupContainer("pageFeedbackArea");
+        feedbackArea.setOutputMarkupId(true);
+        feedbackArea.add(new FeedbackPanel("pageFeedback"));
+        add(feedbackArea);
+
         // ── Sidebar navigation (registry-driven, permission-filtered) ──────────
         PluginRegistry registry = app().getPluginRegistry();
         add(buildNavList("overviewNav",   registry.getPluginsBySection(NavSection.OVERVIEW)));
         add(buildNavList("monitoringNav", registry.getPluginsBySection(NavSection.MONITORING)));
         add(buildNavList("adminNav",      registry.getPluginsBySection(NavSection.ADMIN)));
+    }
+
+    /**
+     * The shared feedback area. Add it to an {@link AjaxRequestTarget} after
+     * calling {@code error(...)} so the message actually appears.
+     */
+    protected WebMarkupContainer getFeedbackArea() {
+        return feedbackArea;
     }
 
     @Override

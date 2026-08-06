@@ -487,7 +487,10 @@ class GatewayConnectionServiceTest {
             java.util.function.Consumer<NewSessionRequest>          adder,
             java.util.function.BiConsumer<String, NewSessionRequest> updater,
             java.util.function.Consumer<String>                      deleter) {
-        return new GatewayConnectionService(sessionIDs, facade, null, adder, updater, deleter);
+        // The connector starter is a no-op here: these tests exercise delegation,
+        // not the FIX engine.
+        return new GatewayConnectionService(sessionIDs, facade, null, adder, updater, deleter,
+                sessionId -> { });
     }
 
     private static NewSessionRequest initiatorRequest() {

@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.plugins.connection;
 
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.NewSessionRequest;
+import com.npsoftdev.fixsimulator.plugins.connection.api.SessionStartException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -347,6 +348,94 @@ class DefaultFixGatewayPluginTest {
             } finally {
                 acceptor.stop(true);
             }
+        }
+    }
+
+    /**
+     * A busy acceptor port must be a reportable configuration problem, not an
+     * internal error, and must not cost the user the session they just typed in.
+     */
+    @Nested
+    class PortInUse {
+
+        @TempDir
+        Path tempDir;
+
+        @Test
+        void bindFailureIsRecognisedAsAPortConflict() throws Exception {
+            try (java.net.ServerSocket hog = new java.net.ServerSocket(0)) {
+                SessionSettings s = DefaultFixGatewayPlugin.buildPerSessionSettings(
+                        new NewSessionRequest("Acceptor", "FIX.4.4", "FIX.4.4",
+                                "SIM", "CLI", "0.0.0.0", hog.getLocalPort(), 30, false));
+                quickfix.Acceptor acceptor = new quickfix.SocketAcceptor(
+                        new RecordingApplication(), new quickfix.MemoryStoreFactory(), s,
+                        new quickfix.DefaultMessageFactory());
+                Exception thrown = assertThrows(Exception.class, acceptor::start,
+                        "binding a port already held must fail");
+                assertTrue(SessionStartException.isAddressInUse(thrown),
+                        "the BindException is wrapped several layers deep and must still be found");
+                try { acceptor.stop(true); } catch (Exception ignored) { }
+            }
+        }
+
+        @Test
+        void unrelatedFailureIsNotReportedAsAPortConflict() {
+            assertFalse(SessionStartException.isAddressInUse(
+                    new quickfix.ConfigError("Missing SenderCompID")),
+                    "only bind failures may be described to the user as a port conflict");
+        }
+
+        @Test
+        void selfReferencingCauseDoesNotHang() {
+            RuntimeException loop = new RuntimeException("boom") {
+                @Override public synchronized Throwable getCause() { return this; }
+            };
+            assertFalse(SessionStartException.isAddressInUse(loop));
+        }
+
+        @Test
+        void configurationSurvivesAFailedStart() throws Exception {
+            Path cfgPath = tempDir.resolve("fix-gateway.cfg");
+            try (java.net.ServerSocket hog = new java.net.ServerSocket(0)) {
+                int busyPort = hog.getLocalPort();
+                DefaultFixGatewayPlugin plugin = pluginWithSessions(cfgPath, "");
+
+                SessionStartException e = assertThrows(SessionStartException.class, () ->
+                        plugin.getConnectionService().addSession(new NewSessionRequest(
+                                "Acceptor", "FIX.4.4", "FIX.4.4", "SIM", "CLI",
+                                "0.0.0.0", busyPort, 30, false)));
+
+                assertTrue(e.isPortInUse(), "expected a port-conflict diagnosis, got: " + e.getMessage());
+                assertTrue(e.getMessage().contains(String.valueOf(busyPort)),
+                        "the message must name the port so the user knows what to free");
+
+                // The whole point: the session is still configured, so the user can
+                // free the port and press Listen instead of retyping it.
+                assertTrue(Files.exists(cfgPath), "config must be written before the start is attempted");
+                String cfg = Files.readString(cfgPath);
+                assertTrue(cfg.contains("SocketAcceptPort=" + busyPort),
+                        "the failed session must still be persisted:\n" + cfg);
+            }
+        }
+
+        @Test
+        void startSucceedsOnceThePortIsFree() throws Exception {
+            Path cfgPath = tempDir.resolve("fix-gateway.cfg");
+            int port;
+            DefaultFixGatewayPlugin plugin = pluginWithSessions(cfgPath, "");
+            try (java.net.ServerSocket hog = new java.net.ServerSocket(0)) {
+                port = hog.getLocalPort();
+                assertThrows(SessionStartException.class, () ->
+                        plugin.getConnectionService().addSession(new NewSessionRequest(
+                                "Acceptor", "FIX.4.4", "FIX.4.4", "SIM", "CLI",
+                                "0.0.0.0", port, 30, false)));
+            }   // port released here — as if the user shut down whatever held it
+
+            // Retry, exactly as the Listen button does.
+            plugin.getConnectionService().connect("FIX.4.4:SIM->CLI");
+            assertTrue(plugin.getConnectionService().listSessionIds().contains("FIX.4.4:SIM->CLI"),
+                    "after a successful retry the session must be live");
+            plugin.stopAllConnectors();
         }
     }
 
