@@ -105,8 +105,10 @@ public class FixSimulatorApplication extends WebApplication {
         super.init();
         getMarkupSettings().setDefaultMarkupEncoding("UTF-8");
 
-        // CSRF protection: reject cross-origin state-mutating requests by
-        // checking Origin / Referer against the server's own host.
+        // CSRF protection for action requests (link clicks, form submits, Ajax).
+        // Wicket tries Sec-Fetch-Site first, then falls back to Origin/Referer, and
+        // if NEITHER yields an answer it fails closed with 403 "The request was
+        // blocked by a resource isolation policy".
         getRequestCycleListeners().add(new ResourceIsolationRequestCycleListener());
 
         // Security response headers on every page response
@@ -115,7 +117,14 @@ public class FixSimulatorApplication extends WebApplication {
             public void onEndRequest(RequestCycle cycle) {
                 if (cycle.getResponse() instanceof WebResponse webResponse) {
                     webResponse.addHeader("X-Frame-Options", "DENY");
-                    webResponse.addHeader("Referrer-Policy", "no-referrer");
+                    // MUST NOT be no-referrer. Browsers omit Origin on same-origin
+                    // GETs, so on a client that sends no Sec-Fetch-* headers the
+                    // Referer is the only signal the isolation check has left — and
+                    // with no signal at all it rejects the request with a 403. That
+                    // turned ordinary clicks (sign out, connect, disconnect) into
+                    // intermittent 403s. same-origin still sends nothing to other
+                    // sites, so no URL is leaked externally.
+                    webResponse.addHeader("Referrer-Policy", "same-origin");
                 }
             }
         });

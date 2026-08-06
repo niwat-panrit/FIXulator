@@ -35,6 +35,13 @@
     <logger name="org.eclipse.jetty"  level="WARN"/>
     <logger name="org.apache.wicket"  level="WARN"/>
 
+    <!-- CSRF / resource-isolation rejections. Wicket logs these at DEBUG, so under
+         the WARN above a blocked request produced a bare 403 in the browser and
+         nothing in the log at all. Keep this on: it names the policy that rejected
+         and the URL, which is the whole diagnosis. -->
+    <logger name="org.apache.wicket.protocol.http.ResourceIsolationRequestCycleListener"
+            level="DEBUG"/>
+
     <!-- QuickFIX/J session events (logon, logout, reconnects, seq resets) — keep at INFO -->
     <logger name="quickfixj.event"    level="INFO"/>
     <!-- QuickFIX/J per-message raw logs are DEBUG — silenced at root INFO level;
