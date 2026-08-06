@@ -41,6 +41,13 @@ public interface ConnectionService {
     /** Returns the connection status string for a session (e.g. "CONNECTED"). */
     String getStatus(String sessionId);
 
+    /**
+     * Returns {@code "Initiator"} or {@code "Acceptor"} for a session, or an empty
+     * string when it is unknown. The UI uses this to label the action a session
+     * actually performs: an initiator <em>connects</em>, an acceptor <em>listens</em>.
+     */
+    String getConnectionType(String sessionId);
+
     /** Initiates a FIX connection for the given session. */
     void connect(String sessionId);
 

@@ -159,7 +159,7 @@ public abstract class BasePage extends WebPage {
             return sid != null && cs != null ? String.valueOf(cs.getRxSequence(sid)) : "-";
         }));
 
-        connInfoBox.add(new AjaxLink<Void>("connectBtn") {
+        AjaxLink<Void> connectBtn = new AjaxLink<>("connectBtn") {
             @Override
             public void onClick(AjaxRequestTarget target) {
                 String sid = activeId();
@@ -173,7 +173,17 @@ public abstract class BasePage extends WebPage {
                 super.onConfigure();
                 setVisible(isActiveSessionValid() && !"CONNECTED".equals(activeStatus()));
             }
-        });
+        };
+        // An initiator dials out; an acceptor waits for the counterparty. Label the
+        // button after what it actually does for this session.
+        connectBtn.add(new Label("connectBtnLabel",
+                (IModel<String>) () -> activeSessionIsAcceptor() ? "Listen" : "Connect"));
+        connectBtn.add(new WebMarkupContainer("connectBtnIcon")
+                .add(new AttributeModifier("class", (IModel<String>) () ->
+                        activeSessionIsAcceptor()
+                                ? "bi bi-broadcast-pin me-1"
+                                : "bi bi-plug-fill me-1")));
+        connInfoBox.add(connectBtn);
 
         connInfoBox.add(new AjaxLink<Void>("disconnectBtn") {
             @Override
@@ -421,6 +431,13 @@ public abstract class BasePage extends WebPage {
         String sid = activeId();
         ConnectionService cs = connSvc();
         return (sid != null && cs != null) ? cs.getStatus(sid) : "";
+    }
+
+    /** Whether the active session listens for a counterparty rather than dialling out. */
+    private boolean activeSessionIsAcceptor() {
+        String sid = activeId();
+        ConnectionService cs = connSvc();
+        return sid != null && cs != null && "Acceptor".equalsIgnoreCase(cs.getConnectionType(sid));
     }
 
     private boolean isActiveSessionValid() {

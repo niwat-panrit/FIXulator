@@ -133,12 +133,15 @@ public class ConnectionManagementPage extends BasePage {
                 statusBadge.add(AttributeModifier.replace("class", statusBadgeCss(s.status())));
                 item.add(statusBadge);
 
-                // Connect link — visible only when not connected
-                item.add(new Link<Void>("connectLink") {
+                // Connect link — visible only when not connected. An initiator dials
+                // out, an acceptor waits for the counterparty, so the label follows
+                // the session type rather than saying "Connect" for both.
+                boolean isAcceptor = "Acceptor".equalsIgnoreCase(s.connectionType());
+                Link<Void> connectLink = new Link<>("connectLink") {
                     @Override
                     public void onClick() {
-                        log.info("User '{}' clicked Connect for session: {}",
-                                currentUser(), s.sessionId());
+                        log.info("User '{}' clicked {} for session: {}",
+                                currentUser(), isAcceptor ? "Listen" : "Connect", s.sessionId());
                         ConnectionService cs = connSvc();
                         if (cs != null) cs.connect(s.sessionId());
                     }
@@ -147,7 +150,9 @@ public class ConnectionManagementPage extends BasePage {
                         super.onConfigure();
                         setVisible(!"CONNECTED".equals(s.status()));
                     }
-                });
+                };
+                connectLink.add(new Label("connectLinkLabel", isAcceptor ? "Listen" : "Connect"));
+                item.add(connectLink);
 
                 // Disconnect link — visible only when connected
                 item.add(new Link<Void>("disconnectLink") {

@@ -179,6 +179,12 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     }
 
     @Override
+    public String getConnectionType(String sessionId) {
+        SessionState s = states.get(sessionId);
+        return s != null ? s.connectionType : "";
+    }
+
+    @Override
     public String getStatus(String sessionId) {
         SessionState s = states.get(sessionId);
         if (s == null) return "UNKNOWN";
