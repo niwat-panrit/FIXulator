@@ -1,6 +1,7 @@
 package com.npsoftdev.fixsimulator.plugins.connection.internal;
 
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.NewSessionRequest;
+import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.SessionActivity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -193,6 +194,76 @@ class GatewayConnectionServiceTest {
     }
 
     // ── enabledSessions tracking ──────────────────────────────────────────────
+
+    @Nested
+    class SessionActivityState {
+
+        @Test
+        void unknownSession_isIdle() {
+            assertEquals(SessionActivity.IDLE, service.getSessionActivity("nope"));
+        }
+
+        @Test
+        void configuredButNeverStarted_isIdle() {
+            service.onSessionCreated(SID_A);
+            assertEquals(SessionActivity.IDLE, service.getSessionActivity(SID_A.toString()),
+                    "a session the user never started offers Connect/Listen");
+        }
+
+        @Test
+        void startedButNoCounterpartyYet_isPending() {
+            service.onSessionCreated(SID_A);
+            service.connect(SID_A.toString());
+            assertEquals(SessionActivity.PENDING, service.getSessionActivity(SID_A.toString()),
+                    "dialling out, or bound and waiting — the control must offer to stop it");
+        }
+
+        @Test
+        void loggedOn_isEstablished() {
+            service.onSessionCreated(SID_A);
+            service.connect(SID_A.toString());
+            service.onLogon(SID_A);
+            assertEquals(SessionActivity.ESTABLISHED, service.getSessionActivity(SID_A.toString()));
+        }
+
+        @Test
+        void stoppingWhilePending_returnsToIdle() {
+            service.onSessionCreated(SID_A);
+            service.connect(SID_A.toString());
+            service.disconnect(SID_A.toString());
+            assertEquals(SessionActivity.IDLE, service.getSessionActivity(SID_A.toString()),
+                    "pressing Stop must return the control to Connect/Listen");
+        }
+
+        @Test
+        void droppedAfterBeingEstablished_isIdleNotPending() {
+            service.onSessionCreated(SID_A);
+            service.connect(SID_A.toString());
+            service.onLogon(SID_A);
+            service.disconnect(SID_A.toString());
+            service.onLogout(SID_A);
+            assertEquals(SessionActivity.IDLE, service.getSessionActivity(SID_A.toString()));
+        }
+
+        @Test
+        void counterpartyDropsButSessionStillEnabled_isPendingAgain() {
+            service.onSessionCreated(SID_A);
+            service.connect(SID_A.toString());
+            service.onLogon(SID_A);
+            service.onLogout(SID_A);   // peer went away; the user never pressed Stop
+            assertEquals(SessionActivity.PENDING, service.getSessionActivity(SID_A.toString()),
+                    "still retrying/listening, so the control must still offer Stop");
+        }
+
+        @Test
+        void activityIsPerSession() {
+            service.onSessionCreated(SID_A);
+            service.onSessionCreated(SID_B);
+            service.connect(SID_A.toString());
+            assertEquals(SessionActivity.PENDING, service.getSessionActivity(SID_A.toString()));
+            assertEquals(SessionActivity.IDLE,    service.getSessionActivity(SID_B.toString()));
+        }
+    }
 
     @Nested
     class EnabledSessionsTracking {

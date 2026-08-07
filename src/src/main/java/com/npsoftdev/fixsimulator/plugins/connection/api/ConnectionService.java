@@ -48,6 +48,26 @@ public interface ConnectionService {
      */
     String getConnectionType(String sessionId);
 
+    /** What a session is currently doing, which decides what its control offers. */
+    enum SessionActivity {
+        /** Doing nothing. The control starts it: Connect, or Listen. */
+        IDLE,
+        /**
+         * An initiator dialling out, or an acceptor bound and waiting, with no
+         * counterparty logged on yet. The control stops it.
+         */
+        PENDING,
+        /** Logged on. The control disconnects it. */
+        ESTABLISHED
+    }
+
+    /**
+     * The session's current activity. Distinguishes "trying" from "doing nothing",
+     * which a status alone cannot: an initiator retrying a refused connection and
+     * one the user never started both sit outside CONNECTED.
+     */
+    SessionActivity getSessionActivity(String sessionId);
+
     /** Initiates a FIX connection for the given session. */
     void connect(String sessionId);
 

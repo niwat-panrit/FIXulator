@@ -188,6 +188,18 @@ public class GatewayConnectionService implements ConnectionService, Serializable
     }
 
     @Override
+    public SessionActivity getSessionActivity(String sessionId) {
+        SessionState s = states.get(sessionId);
+        if (s == null) return SessionActivity.IDLE;
+        if (s.status == SessionStatus.CONNECTED) return SessionActivity.ESTABLISHED;
+        // Started by the user but no counterparty yet: an initiator still retrying,
+        // or an acceptor bound and waiting. Either way it is running and stoppable.
+        return enabledSessions.contains(sessionId)
+                ? SessionActivity.PENDING
+                : SessionActivity.IDLE;
+    }
+
+    @Override
     public String getConnectionType(String sessionId) {
         SessionState s = states.get(sessionId);
         return s != null ? s.connectionType : "";

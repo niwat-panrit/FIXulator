@@ -4,6 +4,7 @@ import com.npsoftdev.fixsimulator.core.FixSimulatorApplication;
 import com.npsoftdev.fixsimulator.core.FixSimulatorSession;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.NewSessionRequest;
+import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.SessionActivity;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.SessionDetails;
 import com.npsoftdev.fixsimulator.plugins.connection.api.SessionStartException;
 import org.apache.wicket.Application;
@@ -134,18 +135,30 @@ public class ConnectionManagementPage extends BasePage {
                 statusBadge.add(AttributeModifier.replace("class", statusBadgeCss(s.status())));
                 item.add(statusBadge);
 
-                // Connect link — visible only when not connected. An initiator dials
-                // out, an acceptor waits for the counterparty, so the label follows
+                // One control for both pre-established states: it starts the session
+                // when idle, and stops it while it is connecting or listening. The
+                // separate Disconnect link takes over once the session is up. An
+                // initiator dials out and an acceptor waits, so the wording follows
                 // the session type rather than saying "Connect" for both.
                 boolean isAcceptor = "Acceptor".equalsIgnoreCase(s.connectionType());
+                SessionActivity activity = activityOf(s.sessionId());
+                boolean pending = activity == SessionActivity.PENDING;
+
                 Link<Void> connectLink = new Link<>("connectLink") {
                     @Override
                     public void onClick() {
-                        log.info("User '{}' clicked {} for session: {}",
-                                currentUser(), isAcceptor ? "Listen" : "Connect", s.sessionId());
                         ConnectionService cs = connSvc();
+                        if (cs == null) return;
+                        // Re-read: the table refreshes on a timer, so the state may
+                        // have moved on since this row was rendered.
+                        boolean stopping = cs.getSessionActivity(s.sessionId()) == SessionActivity.PENDING;
+                        log.info("User '{}' clicked {} for session: {}", currentUser(),
+                                stopping ? (isAcceptor ? "Stop Listening" : "Stop Connecting")
+                                         : (isAcceptor ? "Listen" : "Connect"),
+                                s.sessionId());
                         try {
-                            if (cs != null) cs.connect(s.sessionId());
+                            if (stopping) cs.disconnect(s.sessionId());
+                            else          cs.connect(s.sessionId());
                         } catch (SessionStartException e) {
                             // Retrying a busy port is expected to fail until it is
                             // free; report it and leave the session configured.
@@ -159,7 +172,11 @@ public class ConnectionManagementPage extends BasePage {
                         setVisible(!"CONNECTED".equals(s.status()));
                     }
                 };
-                connectLink.add(new Label("connectLinkLabel", isAcceptor ? "Listen" : "Connect"));
+                connectLink.add(new Label("connectLinkLabel",
+                        pending ? (isAcceptor ? "Stop Listening" : "Stop Connecting")
+                                : (isAcceptor ? "Listen" : "Connect")));
+                connectLink.add(AttributeModifier.replace("class",
+                        pending ? "btn btn-outline-warning" : "btn btn-outline-success"));
                 item.add(connectLink);
 
                 // Disconnect link — visible only when connected
@@ -433,6 +450,12 @@ public class ConnectionManagementPage extends BasePage {
                 port = 9876;
             }
         }
+    }
+
+    /** Current activity of a session, defaulting to IDLE when the service is absent. */
+    private SessionActivity activityOf(String sessionId) {
+        ConnectionService cs = connSvc();
+        return cs != null ? cs.getSessionActivity(sessionId) : SessionActivity.IDLE;
     }
 
     private static String deriveBeginString(String fixVersion) {

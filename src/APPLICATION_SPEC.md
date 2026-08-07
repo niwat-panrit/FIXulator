@@ -220,9 +220,27 @@ starts the connector *before* looking the session up to log it out.
 
 **Acceptor lifecycle:** the connector binds its port as soon as the session
 starts, while the session itself stays logged out until the user presses
-Connect — mirroring an initiator, whose connector runs without dialling.
-Connect (`Session.logon()`) is what lets an inbound logon succeed. Two acceptor
+Listen — mirroring an initiator, whose connector runs without dialling.
+Listen (`Session.logon()`) is what lets an inbound logon succeed. Two acceptor
 sessions cannot share a port, since each owns a separate connector.
+
+### The Connect / Listen control
+
+`ConnectionService.getSessionActivity` collapses status and user intent into the
+three states the control renders, so `BasePage` and `ConnectionManagementPage`
+share one definition rather than each deriving it:
+
+| Activity | Meaning | Control |
+|---|---|---|
+| `IDLE` | never started, or stopped | **Connect** / **Listen** (green) |
+| `PENDING` | initiator dialling, or acceptor bound and waiting | **Stop Connecting** / **Stop Listening** (amber) |
+| `ESTABLISHED` | counterparty logged on | **Disconnect** (red), unchanged |
+
+`PENDING` is exactly "enabled by the user but not logged on" — a distinction
+`getStatus()` cannot make, since a session retrying a refused connection and one
+the user never started are both outside `CONNECTED`. A counterparty dropping
+while the session is still enabled returns it to `PENDING`, not `IDLE`, because
+the session is still trying.
 
 A session that fails to start — an acceptor whose port is taken, most likely —
 is logged and skipped rather than aborting startup, so the UI stays available

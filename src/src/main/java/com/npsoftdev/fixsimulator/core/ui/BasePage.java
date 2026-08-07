@@ -7,6 +7,7 @@ import com.npsoftdev.fixsimulator.core.plugin.PluginRegistry;
 import com.npsoftdev.fixsimulator.core.plugin.SimulatorPlugin;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService;
 import com.npsoftdev.fixsimulator.plugins.connection.api.SessionStartException;
+import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.SessionActivity;
 import com.npsoftdev.fixsimulator.plugins.connection.api.ConnectionService.SessionDetails;
 import com.npsoftdev.fixsimulator.plugins.user.api.AuthService;
 import com.npsoftdev.fixsimulator.plugins.user.api.Permission;
@@ -164,13 +165,22 @@ public abstract class BasePage extends WebPage {
             return sid != null && cs != null ? String.valueOf(cs.getRxSequence(sid)) : "-";
         }));
 
+        // One control covering both pre-established states: it starts the session
+        // when idle, and stops it while it is connecting or listening. Once the
+        // session is established the separate Disconnect button takes over.
         AjaxLink<Void> connectBtn = new AjaxLink<>("connectBtn") {
             @Override
             public void onClick(AjaxRequestTarget target) {
                 String sid = activeId();
                 ConnectionService cs = connSvc();
                 try {
-                    if (sid != null && cs != null) cs.connect(sid);
+                    if (sid != null && cs != null) {
+                        if (activeActivity() == SessionActivity.PENDING) {
+                            cs.disconnect(sid);
+                        } else {
+                            cs.connect(sid);
+                        }
+                    }
                 } catch (SessionStartException e) {
                     // A busy acceptor port is the user's to fix, not an app fault.
                     error(e.getMessage());
@@ -182,18 +192,30 @@ public abstract class BasePage extends WebPage {
             @Override
             protected void onConfigure() {
                 super.onConfigure();
-                setVisible(isActiveSessionValid() && !"CONNECTED".equals(activeStatus()));
+                setVisible(isActiveSessionValid() && activeActivity() != SessionActivity.ESTABLISHED);
             }
         };
-        // An initiator dials out; an acceptor waits for the counterparty. Label the
-        // button after what it actually does for this session.
-        connectBtn.add(new Label("connectBtnLabel",
-                (IModel<String>) () -> activeSessionIsAcceptor() ? "Listen" : "Connect"));
+        // An initiator dials out; an acceptor waits for a counterparty. The label
+        // says both what the session is doing and what pressing this will do.
+        connectBtn.add(new Label("connectBtnLabel", (IModel<String>) () -> {
+            boolean acceptor = activeSessionIsAcceptor();
+            if (activeActivity() == SessionActivity.PENDING) {
+                return acceptor ? "Stop Listening" : "Stop Connecting";
+            }
+            return acceptor ? "Listen" : "Connect";
+        }));
         connectBtn.add(new WebMarkupContainer("connectBtnIcon")
-                .add(new AttributeModifier("class", (IModel<String>) () ->
-                        activeSessionIsAcceptor()
-                                ? "bi bi-broadcast-pin me-1"
-                                : "bi bi-plug-fill me-1")));
+                .add(new AttributeModifier("class", (IModel<String>) () -> {
+                    if (activeActivity() == SessionActivity.PENDING) return "bi bi-stop-circle me-1";
+                    return activeSessionIsAcceptor()
+                            ? "bi bi-broadcast-pin me-1"
+                            : "bi bi-plug-fill me-1";
+                })));
+        // Amber while running, green when it is an invitation to start.
+        connectBtn.add(new AttributeModifier("class", (IModel<String>) () ->
+                activeActivity() == SessionActivity.PENDING
+                        ? "btn btn-sm btn-warning py-0 px-2"
+                        : "btn btn-sm btn-success py-0 px-2"));
         connInfoBox.add(connectBtn);
 
         connInfoBox.add(new AjaxLink<Void>("disconnectBtn") {
@@ -456,6 +478,15 @@ public abstract class BasePage extends WebPage {
         String sid = activeId();
         ConnectionService cs = connSvc();
         return (sid != null && cs != null) ? cs.getStatus(sid) : "";
+    }
+
+    /** What the active session is currently doing. */
+    private SessionActivity activeActivity() {
+        String sid = activeId();
+        ConnectionService cs = connSvc();
+        return sid != null && cs != null
+                ? cs.getSessionActivity(sid)
+                : SessionActivity.IDLE;
     }
 
     /** Whether the active session listens for a counterparty rather than dialling out. */

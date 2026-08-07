@@ -219,7 +219,11 @@ once. <strong>Sign Out</strong> in the top-right clears that immediately.</p>
   <li><strong>Session switcher</strong> — chooses which FIX session the pages act on.
       Orders, Trades, and FIX Activity all follow this selection, and it is remembered
       per user between restarts.</li>
-  <li><strong>Connect / Disconnect</strong> — brings the selected session up or down.</li>
+  <li><strong>Connect / Listen</strong> — starts the selected session. The button follows
+      what the session is doing: <em>Connect</em> or <em>Listen</em> when it is idle,
+      <em>Stop Connecting</em> or <em>Stop Listening</em> (amber) while it is dialling out or
+      waiting for a counterparty, and <em>Disconnect</em> (red) once a counterparty is logged
+      on. So the button both shows the state and offers the opposite action.</li>
   <li><strong>Seq Mgmt</strong> — inspect and reset sequence numbers for the session.</li>
 </ul>
 
@@ -277,13 +281,16 @@ is not used, since an acceptor binds all interfaces.</p>
 
 <ul>
   <li>The port is bound as soon as the session starts, but the session stays inactive until
-      you press <strong>Connect</strong> — exactly as an initiator does not dial until you
-      tell it to. A counterparty that connects beforehand is refused.</li>
+      you press <strong>Listen</strong> — exactly as an initiator does not dial until you
+      tell it to. A counterparty that connects beforehand is refused. While it is listening the
+      button reads <strong>Stop Listening</strong>, which releases it again.</li>
   <li>Point your counterparty at this machine's address and that port, with its
       TargetCompID matching your SenderCompID and vice versa.</li>
-  <li><strong>Two acceptor sessions cannot share a port.</strong> Give each its own. If a
-      port is already taken, that session is skipped at startup and the reason is written to
-      the system log — the rest of the app still runs, so you can correct the port.</li>
+  <li><strong>Two acceptor sessions cannot share a port.</strong> Give each its own. If the
+      port is already in use, saving the session tells you so and keeps the session anyway:
+      free the port and press <strong>Listen</strong> to retry, or edit the session onto a
+      different port, which releases the old one. A session whose port is taken at startup is
+      skipped and the reason written to the system log, so the app still runs.</li>
 </ul>
 
 <p>Deleting a session archives its QuickFIX/J files rather than destroying them — they are
