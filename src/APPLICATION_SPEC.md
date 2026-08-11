@@ -4,7 +4,7 @@
 > before touching any code.  Update it whenever a significant feature is added
 > or changed.
 >
-> **Last updated:** 2026-07-20
+> **Last updated:** 2026-08-11
 
 ---
 
@@ -96,11 +96,16 @@ com.npsoftdev.fixsimulator
 │   │   ├── HomePage.java (+ .html)   — dashboard: stats + recent messages
 │   │   ├── JsEscape.java             — public; used by pages in every plugin
 │   │   └── PagePermissions.java      — page → required Permission mapping
-│   └── logging/
-│       ├── LogFileService.java       — port: read the active Logback file
-│       ├── DefaultLogFileService.java  — 5 MB cap per readFrom; UTF-8 safe
-│       │                                 across the read boundary
-│       └── SystemLogsPage.java (+ .html/.css/.js)
+│   ├── logging/
+│   │   ├── LogFileService.java       — port: read the active Logback file
+│   │   ├── DefaultLogFileService.java  — 5 MB cap per readFrom; UTF-8 safe
+│   │   │                                 across the read boundary
+│   │   └── SystemLogsPage.java (+ .html/.css/.js)
+│   └── desktop/                    — the tray-resident desktop shell
+│       ├── TrayIntegration.java      — tray icon: Open / Exit; no-ops headless
+│       ├── StartupNotice.java        — one-time "it lives in the tray" dialog
+│       ├── DesktopSettings.java      — desktop.yaml; the "don't show" flag
+│       └── AppIcon.java              — the icon, painted at the requested size
 │
 └── plugins/
     ├── connection/                 — 1. FIX connections
@@ -189,6 +194,7 @@ user may write to.
 | `orders-*.yaml` | Persisted order maps per session | `GatewayOrderService` |
 | `trades-*.yaml` | Persisted trade maps per session | `GatewayOrderService` |
 | `messages-*.yaml` | Persisted message log per session | `GatewayMessageLogService` |
+| `desktop.yaml` | Tray/startup-notice preferences (per install, not per user) | `DesktopSettings` |
 
 **Gitignore rule:** `*.yaml` is ignored; `*.yaml.sample` is tracked.
 `src/fix-gateway.cfg` (written during tests) is also ignored.
@@ -540,3 +546,73 @@ method.
 `DefaultOrderManagerPlugin` — wires `OrderService`, `TradeService`,
 `TemplateService`, `ValueMappingService`, `UserRepository`, `AuthService`,
 `LogFileService`; seeds built-in templates; restores persisted orders/trades/messages.
+
+---
+
+## 18. Desktop Shell (tray icon + startup notice)
+
+An installed build starts a web server and nothing else — no console, no
+window.  Without a tray icon the only way to stop it on Windows is to kill
+`FIXulator.exe` from Task Manager.  `core/desktop/` closes that gap.
+
+### Tray icon (`TrayIntegration`)
+
+Installed by `Main` **after** the server is up, so the tooltip only ever
+advertises an address that is actually serving.
+
+| Menu item | Does |
+|---|---|
+| `Open FIXulator` | Opens the UI in the default browser |
+| `Exit FIXulator` | Removes the icon, stops Jetty, ends the process |
+
+Double-clicking the icon is a shortcut for `Open FIXulator`.
+
+The icon is **painted, not loaded** (`AppIcon`): tray sizes vary by OS and
+display scale, and downscaling a fixed bitmap to 16 px is what makes tray icons
+look muddy.  It mirrors the navbar brand — a `#0d1117` rounded square with the
+`bi-activity` pulse in blue.  The badge is opaque on purpose; a bare glyph
+would have to pick one colour and would then vanish against either a light or a
+dark taskbar.
+
+**Everything is best-effort.**  `install` returns `false` — leaving the server
+running exactly as before — when the host is headless, when the desktop has no
+tray, or when `-Dfixulator.tray=false` is set.  Nothing else may assume a tray
+exists.
+
+On macOS, `apple.awt.UIElement=true` is set before the first AWT class loads, so
+a tray-resident app gets no Dock icon and no Cmd-Tab entry — both would be dead
+ends, since there is no window to switch to.
+
+### Exit must exit
+
+`Main.shutdown` starts a 5-second watchdog before calling `server.stop()`, and
+halts the JVM if the orderly shutdown has not finished by then.  An Exit that
+does not exit is the exact problem the tray icon exists to solve, so a hung FIX
+connector must not be able to put the user back in Task Manager.  The menu
+handler runs it on its own thread; blocking the AWT event thread would freeze
+the menu mid-click.
+
+### Startup notice (`StartupNotice`)
+
+Shown once, on the first run, and only when a tray icon was actually installed —
+telling a user to quit from a tray that isn't there would be worse than saying
+nothing.  It states the URL, that closing the browser does not stop the
+simulator, and how to quit; it names the tray the way the host OS does
+("notification area" on Windows, "menu bar" on macOS).
+
+The **"Don't show this message again"** checkbox is saved on any dismissal,
+including the window's X — the checkbox is an instruction, not part of the
+answer — to `desktop.yaml` via `DesktopSettings`.
+
+Two details that are load-bearing:
+
+- The dialog is owned by a temporary always-on-top `UTILITY` frame.  A dialog
+  owned by `null` opens *behind* whatever the user is working in, which for a
+  first-run explanation defeats the point.
+- Paragraphs use explicit `<br><br>`.  Swing's HTML 3.2 renderer collapses
+  block margins inside a `JLabel`, running the text into one wall.
+
+`DesktopSettings` uses Jackson directly rather than `YamlPersistenceService`:
+`core` must not depend on a plugin — the dependency runs the other way.  Reads
+and writes are forgiving; the worst case of a failure is that the notice
+appears once more.

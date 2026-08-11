@@ -1,6 +1,9 @@
 package com.npsoftdev.fixsimulator;
 
 import com.npsoftdev.fixsimulator.core.AppHome;
+import com.npsoftdev.fixsimulator.core.desktop.DesktopSettings;
+import com.npsoftdev.fixsimulator.core.desktop.StartupNotice;
+import com.npsoftdev.fixsimulator.core.desktop.TrayIntegration;
 
 import org.eclipse.jetty.ee10.webapp.WebAppContext;
 import org.eclipse.jetty.server.Server;
@@ -21,6 +24,9 @@ import java.util.TimeZone;
  * <p>Usage: {@code java -jar fix-simulator.jar [port]}  (default port: 8080)</p>
  */
 public class Main {
+
+    /** How long an orderly shutdown gets before the process is halted outright. */
+    private static final long SHUTDOWN_TIMEOUT_MS = 5_000;
 
     public static void main(String[] args) throws Exception {
         // All three calls must happen before any SLF4J logger is first accessed,
@@ -65,9 +71,48 @@ public class Main {
         server.setHandler(context);
         server.start();
 
-        System.out.printf("%n  FIX Simulator  →  http://localhost:%d%n%n", port);
+        String url = "http://localhost:" + port;
+        System.out.printf("%n  FIX Simulator  →  %s%n%n", url);
+
+        // A packaged desktop build shows neither a console nor a window, so
+        // without this there is no way to stop it short of Task Manager.
+        // Returns false on a headless host, where the app runs as before.
+        if (TrayIntegration.install(url, () -> shutdown(server))) {
+            StartupNotice.showIfNeeded(url, new DesktopSettings(AppHome.resolve().resolve("data")));
+        }
 
         server.join();
+    }
+
+    /**
+     * Stops Jetty and ends the process. Invoked by the tray's Exit item, on a
+     * thread of its own so the menu does not freeze while this runs.
+     *
+     * <p>The watchdog is the point: Exit that does not exit is exactly the
+     * problem the tray icon exists to solve, so if the orderly shutdown stalls
+     * — a FIX connector refusing to close, a shutdown hook hanging — the
+     * process is halted anyway.</p>
+     */
+    private static void shutdown(Server server) {
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(SHUTDOWN_TIMEOUT_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            System.err.println("Shutdown did not complete in time — halting.");
+            Runtime.getRuntime().halt(0);
+        }, "fixulator-shutdown-watchdog");
+        watchdog.setDaemon(true);
+        watchdog.start();
+
+        try {
+            server.stop();
+        } catch (Exception e) {
+            System.err.println("Error stopping the server: " + e.getMessage());
+        }
+        System.exit(0);
     }
 
     /**

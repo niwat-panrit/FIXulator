@@ -112,6 +112,7 @@
   <a href="#what">What FIXulator is</a>
   <a href="#install">Install</a>
   <a href="#first-run">First run &amp; sign in</a>
+  <a href="#stopping">Starting &amp; stopping</a>
   <a href="#tour">The interface</a>
   <strong>Using it</strong>
   <a href="#connections">FIX connections</a>
@@ -196,8 +197,12 @@ java -jar target/fix-simulator.jar 9090   # a different port</code></pre>
 <h2 id="first-run">First run &amp; sign in</h2>
 
 <ol class="steps">
-  <li>Launch FIXulator. It starts a local web server and prints the address.</li>
-  <li>Open <code>http://localhost:8080</code> in a browser.</li>
+  <li>Launch FIXulator. No window opens — it runs a local web server in the
+      background and puts an icon in the system tray. On the first run it tells
+      you so in a dialog, which you can turn off with <em>Don't show this
+      message again</em>.</li>
+  <li>Open <code>http://localhost:8080</code> in a browser, or choose
+      <em>Open FIXulator</em> from the tray icon's menu.</li>
   <li>Sign in with the account created on first startup:
       username <code>admin</code>, password <code>admin</code>.</li>
 </ol>
@@ -211,6 +216,35 @@ java -jar target/fix-simulator.jar 9090   # a different port</code></pre>
 
 <p>FIXulator remembers you for 30 days via a browser cookie, so you normally sign in
 once. <strong>Sign Out</strong> in the top-right clears that immediately.</p>
+
+<h2 id="stopping">Starting &amp; stopping</h2>
+
+<p>FIXulator has no application window. It is a local web server with a tray
+icon: <strong>the notification area</strong> at the right-hand end of the taskbar on
+Windows (click the <code>^</code> arrow if hidden icons are collapsed), and the
+<strong>menu bar</strong> at the top of the screen on macOS.</p>
+
+<p>Right-click the icon for two things:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Menu item</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Open FIXulator</strong></td><td>Opens the interface in your default browser. Double-clicking the icon does the same.</td></tr>
+    <tr><td><strong>Exit FIXulator</strong></td><td>Stops the server and closes the application.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="warn">
+  <p><strong>Closing the browser does not stop FIXulator.</strong> That is deliberate —
+  your FIX sessions stay connected while you switch tabs or restart your browser.
+  Use <em>Exit FIXulator</em> when you actually want it to stop.</p>
+</div>
+
+<p>If you run the JAR from a terminal instead, <kbd>Ctrl</kbd>+<kbd>C</kbd> still
+works, and on a machine with no desktop — a server, a container — there is no tray
+icon and nothing changes.</p>
 
 <h2 id="tour">The interface</h2>
 
@@ -478,6 +512,10 @@ application folder:</p>
 saved orders and trades; <code>logs/</code> holds the log files; and
 <code>fix-gateway.cfg</code> holds session configuration.</p>
 
+<p>One file there is about the app rather than your data: <code>data/desktop.yaml</code>
+records whether you ticked <em>Don't show this message again</em> on the first-run
+notice. Delete it to see that notice again.</p>
+
 <p>To put that somewhere else — a server volume, a shared drive — set either:</p>
 
 <pre><code>-Dfixulator.home=/srv/fixulator     # JVM flag
@@ -506,6 +544,23 @@ beside the working directory.</p>
       <td>The app will not start, or the browser cannot reach it</td>
       <td>Another process holds port 8080. Start it on a different port:
           <code>java -jar fix-simulator.jar 9090</code>.</td>
+    </tr>
+    <tr>
+      <td>Nothing happened when you launched it</td>
+      <td>That is normal — FIXulator has no window. Look for its icon in the tray and
+          choose <a href="#stopping"><em>Open FIXulator</em></a>. On Windows the icon may
+          be behind the <code>^</code> arrow in the notification area.</td>
+    </tr>
+    <tr>
+      <td>You closed the browser but FIXulator is still running</td>
+      <td>Also normal — closing the page leaves the FIX sessions up. Right-click the tray
+          icon and choose <em>Exit FIXulator</em> to stop it.</td>
+    </tr>
+    <tr>
+      <td>No tray icon appears at all</td>
+      <td>The desktop has no system tray, or you started it on a machine without one.
+          Stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal that launched it, or
+          from your service manager.</td>
     </tr>
     <tr>
       <td>Logon is rejected by the counterparty</td>

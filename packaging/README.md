@@ -34,6 +34,24 @@ APP_VERSION=1.2.0 ./packaging/jpackage.sh dmg
 
 In CI a `v*` tag sets it automatically (`v1.2.0` → `1.2.0`).
 
+## How an installed build is stopped
+
+An installed build has no console and no application window — it starts a web
+server and sits there — so it puts an icon in the system tray (the notification
+area on Windows, the menu bar on macOS). Right-click it for:
+
+- **Open FIXulator** — opens the UI in your browser
+- **Exit FIXulator** — stops the server and ends the process
+
+The first run also shows a dialog explaining that closing the browser does not
+stop the simulator, with a **Don't show this message again** checkbox. The
+choice is stored in `desktop.yaml` in the data directory below; delete that file
+to see the notice again.
+
+On a host with no desktop the tray is skipped silently and the app runs exactly
+as it always has — stop it with `Ctrl-C` or your service manager. Pass
+`-Dfixulator.tray=false` to skip it on a desktop too.
+
 ## Where an installed build keeps its data
 
 This is the part that differs from running the JAR. The install location is

@@ -26,6 +26,11 @@ Download the one for your platform from the
 | Red Hat / Fedora | `.rpm` |
 | macOS | `.dmg` |
 
+FIXulator runs in the background and puts an icon in the system tray — the
+notification area on Windows, the menu bar on macOS. Right-click it to open the
+UI or to **Exit FIXulator**. Closing the browser does not stop it; your FIX
+sessions stay up until you exit.
+
 An installed build keeps its data in your user profile, not next to the
 application — see [packaging/README.md](packaging/README.md) for the exact
 locations and how to override them. To build the installers yourself, see the
@@ -90,6 +95,14 @@ java -jar target/fix-simulator.jar 9090
 ```
 
 The app will be available at **http://localhost:8080**.
+
+On a machine with a desktop this also adds a tray icon (and, on the first run, a
+one-time notice explaining it). Inside the dev container there is no desktop, so
+neither appears. To suppress both when running from a terminal:
+
+```bash
+java -Dfixulator.tray=false -jar target/fix-simulator.jar
+```
 
 Run the test suite on its own with:
 
