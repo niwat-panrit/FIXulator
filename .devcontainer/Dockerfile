@@ -57,4 +57,18 @@ RUN echo 'source /usr/local/sdkman/bin/sdkman-init.sh' >> /etc/bash.bashrc
 # ── Ownership so vscode user can manage SDKMAN ────────────────────────────────
 RUN chown -R vscode:vscode /usr/local/sdkman
 
+# ── Volume mount points, created before anything mounts over them ─────────────
+# When Docker creates a named volume it seeds the volume from the image path it
+# is mounted at, ownership included — but only if that path EXISTS in the image.
+# Where it does not, Docker creates the directory itself, owned by root:root,
+# and the container user cannot write to it. Neither of these paths exists in
+# the base image, so ~/.m2/repository came up root-owned and `mvn` failed with
+# permission errors for the vscode user.
+#
+# Creating them here as vscode is what makes a fresh volume inherit uid 1000.
+# It does nothing for volumes that already exist — Docker seeds a volume once,
+# at creation, and they outlive rebuilds — so post-create.sh repairs those.
+RUN mkdir -p /home/vscode/.m2/repository /home/vscode/.claude \
+    && chown -R vscode:vscode /home/vscode/.m2 /home/vscode/.claude
+
 USER vscode

@@ -9,6 +9,45 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo " FIXulator – Container post-create setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# ── Repair ownership of mounted volumes and toolchains ───────────────────────
+# Docker creates a named volume's mount point as root:root when that path does
+# not exist in the image, which left ~/.m2/repository unwritable and broke
+# `mvn` for the vscode user. The Dockerfile now pre-creates those paths so new
+# volumes inherit the right owner — but a volume is seeded only once, at
+# creation, and volumes survive rebuilds. Anything already root-owned has to be
+# repaired here or it stays broken forever.
+#
+# Compared against the *current* uid rather than a hardcoded 1000 because
+# updateRemoteUserUID can remap the vscode user to match the host account.
+# Looks INSIDE the tree, not just at the top directory. ~/.m2 is created by the
+# Dockerfile and is correctly owned, while the volume mounted at
+# ~/.m2/repository beneath it is the part that comes up root-owned — a check of
+# the top directory alone reports "fine" and repairs nothing.
+# -quit stops at the first offender, so only the healthy case walks the tree.
+ensure_owned() {
+    local target="$1"
+    [ -e "$target" ] || return 0
+
+    local foreign
+    foreign="$(find "$target" ! -user "$(id -u)" -print -quit 2>/dev/null || true)"
+    [ -z "$foreign" ] && return 0
+
+    if command -v sudo >/dev/null 2>&1; then
+        echo "  repairing owner of $target (found $foreign)"
+        sudo chown -R "$(id -u):$(id -g)" "$target"
+    else
+        echo "  WARNING: $foreign is not owned by uid $(id -u) and sudo is" >&2
+        echo "           unavailable to fix it. Builds writing there will fail." >&2
+    fi
+}
+
+echo ""
+echo "▸ Ownership:"
+ensure_owned "$HOME/.m2"
+ensure_owned "$HOME/.claude"
+ensure_owned "${SDKMAN_DIR:-/usr/local/sdkman}"
+echo "  ok"
+
 # ── Load SDKMAN ──────────────────────────────────────────────────────────────
 source /usr/local/sdkman/bin/sdkman-init.sh
 
