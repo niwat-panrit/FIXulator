@@ -1,12 +1,19 @@
 <#
     Builds the native FIXulator installer for Windows.
 
-    jpackage cannot cross-compile, so this must run on Windows. The MSI type
-    additionally needs the WiX Toolset v3 on PATH (https://wixtoolset.org);
-    without it, use -Type exe for a self-extracting installer instead.
+    jpackage cannot cross-compile, so this must run on Windows.
 
-        .\packaging\jpackage.ps1                 # .msi
-        .\packaging\jpackage.ps1 -Type exe       # .exe
+    Both installer types need the WiX Toolset on PATH (https://wixtoolset.org):
+    jpackage does not write an MSI itself, it generates WiX source and invokes
+    candle.exe and light.exe, and -Type exe is a WiX bundle wrapping that MSI.
+    It must be the v3 line — v4 and v5 replaced those two tools with a single
+    wix.exe, which this JDK's jpackage does not know how to drive.
+
+    -Type app-image needs no WiX at all, and is the fastest way to check a
+    packaging change or test the installed-build behaviour.
+
+        .\packaging\jpackage.ps1                 # .msi        (needs WiX v3)
+        .\packaging\jpackage.ps1 -Type exe       # .exe        (needs WiX v3)
         .\packaging\jpackage.ps1 -Type app-image # unpacked folder, no installer
 #>
 param(
@@ -59,8 +66,12 @@ $jpackageArgs = @(
     "--java-options", "-Xmx512m"
 )
 
+# --license-file is rejected for app-image, which produces no installer to
+# carry a licence page.
 $license = Join-Path $RepoRoot "LICENSE"
-if (Test-Path $license) { $jpackageArgs += @("--license-file", $license) }
+if ($Type -ne "app-image" -and (Test-Path $license)) {
+    $jpackageArgs += @("--license-file", $license)
+}
 
 if ($Type -in @("msi", "exe")) {
     $jpackageArgs += @(
