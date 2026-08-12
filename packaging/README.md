@@ -13,16 +13,27 @@ targets:
 | `.dmg` / `.pkg` | macOS | `./packaging/jpackage.sh dmg` | — |
 | `.deb` | Debian / Ubuntu | `./packaging/jpackage.sh deb` | `fakeroot`, `binutils` |
 | `.rpm` | Fedora / RHEL / Rocky | `./packaging/jpackage.sh rpm` | `rpm-build` |
-| `.msi` | Windows | `.\packaging\jpackage.ps1` | [WiX Toolset](https://wixtoolset.org) |
-| `.exe` | Windows | `.\packaging\jpackage.ps1 -Type exe` | — |
+| `.msi` | Windows | `.\packaging\jpackage.ps1` | [WiX Toolset **v3**](https://wixtoolset.org) |
+| `.exe` | Windows | `.\packaging\jpackage.ps1 -Type exe` | [WiX Toolset **v3**](https://wixtoolset.org) |
 
 If you don't have all four platforms to hand, push a `v*` tag and let
 `.github/workflows/release.yml` build them on GitHub's runners — that is what
 the matrix is for.
 
-`app-image` is also accepted on every platform (`./packaging/jpackage.sh app-image`)
-and produces an unpacked application directory instead of an installer. It is
-the fastest way to check a packaging change.
+**Windows needs WiX for both installer types**, not just the MSI. `jpackage`
+does not write an MSI itself: it generates WiX source and invokes `candle.exe`
+and `light.exe`, and `-Type exe` is a WiX bundle wrapping that same MSI. It must
+be the **v3** line — v4 and v5 replaced those two tools with a single `wix.exe`,
+so a v4 install leaves `jpackage` reporting the v3 tools as missing.
+
+`app-image` is accepted on every platform — `./packaging/jpackage.sh app-image`,
+or `.\packaging\jpackage.ps1 -Type app-image` — and produces an unpacked
+application directory instead of an installer. It needs no WiX, and is both the
+fastest way to check a packaging change and the easiest way to test
+installed-build behaviour: the launcher it produces
+(`src/target/installers/FIXulator/FIXulator.exe` on Windows) still passes
+`-Dfixulator.packaged=true`, so it uses the per-user data directory exactly as
+an installed copy would.
 
 ## Version
 
