@@ -30,17 +30,21 @@ class AppHomeTest {
                 "a source checkout must keep writing to ./data and ./logs as before");
     }
 
+    // The expectation is made absolute the same way resolve() does. "/srv/…" is
+    // already absolute on POSIX, but on Windows it is drive-relative, so there
+    // it resolves to C:\srv\fixulator and a bare Paths.get would not match.
+
     @Test
     void resolve_explicitPropertyWins() {
         System.setProperty(AppHome.HOME_PROPERTY, "/srv/fixulator");
-        assertEquals(Paths.get("/srv/fixulator"), AppHome.resolve());
+        assertEquals(Paths.get("/srv/fixulator").toAbsolutePath(), AppHome.resolve());
     }
 
     @Test
     void resolve_explicitPropertyWinsOverPackagedFlag() {
         System.setProperty(AppHome.PACKAGED_PROPERTY, "true");
         System.setProperty(AppHome.HOME_PROPERTY, "/srv/fixulator");
-        assertEquals(Paths.get("/srv/fixulator"), AppHome.resolve(),
+        assertEquals(Paths.get("/srv/fixulator").toAbsolutePath(), AppHome.resolve(),
                 "an operator pinning a data volume must override the packaged default");
     }
 
